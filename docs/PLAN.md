@@ -29,12 +29,14 @@
        Windmill.tsx            ← 물레 컴포넌트 (빙글빙글 물레방아 맵)
        BlackHole.tsx
        Scoreboard.tsx
+       WinnerBanner.tsx        ← 우측 하단 우승자 배너 (fade-in)
      result/
        WinnerDisplay.tsx
        RankingTable.tsx
    lib/
      ballTint.ts               ← 색상 팔레트 + Canvas 합성 유틸
      blackholeShader.ts        ← WebGL 블랙홀 쉐이더 유틸
+     winnerCheck.ts            ← 우승 확정 판정 로직
    ```
 
 ---
@@ -51,7 +53,7 @@
 - **맵 선택:** 게임 시작 전 아래 두 맵 중 선택
   - `기본맵` — 불규칙 핀 배치 표준 파칭코 보드
   - `빙글빙글 물레방아` — 물레 2개 배치, 물레 영역에 핀 없음
-- **전환:** 시작 버튼 클릭 → 선택한 맵의 게임 화면으로 이동
+- **전환:** 시작 버튼 클릭 → 입력창·카드 영역 즉시 제거 → 게임 화면으로 이동
 
 ---
 
@@ -72,6 +74,13 @@
   - 거리·시간 기반 나선형 왜곡 적용
   - 블랙홀 모드 진입 강도(`intensity`) 파라미터로 점진적 강화
 - 매 프레임 `uniform` 업데이트 (시간, 구멍 위치, 강도)
+
+#### `lib/winnerCheck.ts`
+- **우승 확정 판정 함수:** 매 구슬 소진 이벤트마다 호출
+- **판정 로직:**
+  1. **구슬 소진:** 잔여 구슬이 0이면 점수 최고점 플레이어를 우승자로 반환
+  2. **조기 확정:** `1위 점수 > 2위 점수 + 잔여 구슬 수` 조건을 만족하면 즉시 우승자 반환
+- 동점 처리: 구슬 소진 시 공동 1위 가능, 조기 확정 시에는 단독 1위만 해당
 
 ---
 
@@ -101,7 +110,7 @@
 #### 4-3. BlackHole 컴포넌트
 - **위치:** 보드 하단 약 70~80% 지점 중앙
 - **구현:** Matter.js sensor body
-- **점수 집계:** 구슬이 sensor에 진입하면 투명 처리 후 해당 플레이어 점수 +1
+- **점수 집계:** 구슬이 sensor에 진입하면 투명 처리 후 해당 플레이어 점수 +1, `winnerCheck.ts` 호출
 
 - **블랙홀 모드 (잔여 구슬 ≤ 200개):**
   - 구멍 크기 점점 확대 애니메이션
@@ -112,9 +121,21 @@
 - **피날레 연출 (잔여 구슬 ≤ 10개):**
   - Matter.js 엔진 `timeScale`을 0.2~0.3으로 낮춰 슬로우모션 적용
   - Canvas 변환(scale + translate)으로 hole 위치로 카메라 줌인
-  - 마지막 구슬 소진 시 결과 화면 전환
+  - 마지막 구슬 소진 또는 조기 확정 시 `WinnerBanner` 표시 후 결과 화면 전환
 
-#### 4-4. Scoreboard (HUD) 컴포넌트
+#### 4-4. WinnerBanner 컴포넌트
+- **위치:** 화면 우측 하단 고정 (CSS `position: fixed; bottom; right`)
+- **표시 시점:** 우승 확정(`winnerCheck` 반환값 존재) 즉시
+- **CSS 애니메이션:** `opacity: 0 → 1` fade-in (transition 1~1.5s)
+- **레이아웃:**
+  ```
+  Winner          ← 흰색, 30px 이상
+  플레이어A 🔵   ← 플레이어 색상, 30px 이상, 구슬 이미지(pinball.png 합성) 포함
+  ```
+- "Winner" 텍스트는 흰색, 닉네임은 해당 플레이어의 구슬 색상으로 표시
+- 구슬 이미지는 `ballTint.ts`의 오프스크린 합성 캐시를 재사용
+
+#### 4-5. Scoreboard (HUD) 컴포넌트
 - 화면 측면 고정
 - 플레이어별 현재 점수, 잔여 구슬 수 실시간 표시
 
@@ -133,26 +154,27 @@
 | 순서 | 항목 |
 |------|------|
 | 1 | 프로젝트 초기 설정 + 에셋 배치 |
-| 2 | 설정 화면 (닉네임 입력 + 맵 선택 + 유효성 검사) |
+| 2 | 설정 화면 (닉네임 입력 + 맵 선택 + 유효성 검사, 시작 시 즉시 제거) |
 | 3 | `lib/ballTint.ts` — 1000개 분배 + 색상 팔레트 + Canvas 합성 유틸 |
-| 4 | PachinkoBoard — Matter.js 월드 + 핀 배치 |
-| 5 | 대포 스윙 + 구슬 발사 로직 (1000개 균등 분배) |
-| 6 | BlackHole sensor + 점수 집계 |
-| 7 | Scoreboard HUD 실시간 업데이트 |
-| 8 | 블랙홀 모드 (잔여 200개 이하 · 구멍 확대 · 흡인력) |
-| 9 | `lib/blackholeShader.ts` — WebGL 쉐이더 흡인 이펙트 |
-| 10 | 피날레 연출 (잔여 10개 · 슬로우모션 · 줌인) |
-| 11 | Windmill 컴포넌트 (빙글빙글 물레방아 맵) |
-| 12 | 결과 화면 (WinnerDisplay + RankingTable) |
-| 13 | 60fps 성능 최적화 |
-| 14 | (P1) 구슬 발사 순차 딜레이 |
-| 15 | (P2) 배경음악 + 효과음 |
+| 4 | `lib/winnerCheck.ts` — 우승 확정 판정 로직 (구슬 소진 + 조기 확정) |
+| 5 | PachinkoBoard — Matter.js 월드 + 핀 배치 |
+| 6 | 대포 스윙 + 구슬 발사 로직 (1000개 균등 분배) |
+| 7 | BlackHole sensor + 점수 집계 + winnerCheck 연동 |
+| 8 | Scoreboard HUD 실시간 업데이트 |
+| 9 | WinnerBanner — 우측 하단 fade-in 배너 |
+| 10 | 블랙홀 모드 (잔여 200개 이하 · 구멍 확대 · 흡인력) |
+| 11 | `lib/blackholeShader.ts` — WebGL 쉐이더 흡인 이펙트 |
+| 12 | 피날레 연출 (잔여 10개 · 슬로우모션 · 줌인) |
+| 13 | Windmill 컴포넌트 (빙글빙글 물레방아 맵) |
+| 14 | 결과 화면 (WinnerDisplay + RankingTable) |
+| 15 | 60fps 성능 최적화 |
+| 16 | (P1) 구슬 발사 순차 딜레이 + 효과음 |
 
 ---
 
 ## 성능 고려사항
 - 총 1000개 구슬 동시 시뮬레이션 시 60fps 유지 목표
 - Matter.js 바디 수 최적화 (구멍에 들어간/보드 이탈 구슬 즉시 제거)
-- 오프스크린 Canvas 캐싱으로 합성 비용 최소화
+- 오프스크린 Canvas 캐싱으로 합성 비용 최소화 (WinnerBanner에서도 재사용)
 - WebGL 쉐이더는 별도 오버레이 Canvas에서 구동 (메인 Canvas와 분리)
 - 데스크탑 Chrome 최신 버전 기준 최적화
