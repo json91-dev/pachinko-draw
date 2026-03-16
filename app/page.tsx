@@ -1,65 +1,162 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import PlayerList from '@/components/PlayerList';
+import { PLAYER_COLORS, distributeBalls } from '@/lib/ballTint';
+
+export default function SetupPage() {
+  const router = useRouter();
+  const [namesInput, setNamesInput] = useState('');
+  const [map, setMap] = useState('default');
+
+  const names = namesInput
+    .split(',')
+    .map((n) => n.trim())
+    .filter((n) => n.length > 0);
+
+  const uniqueNames = [...new Set(names)];
+  const hasDuplicates = names.length !== uniqueNames.length;
+  const isValid =
+    uniqueNames.length >= 2 &&
+    uniqueNames.length <= 30 &&
+    !hasDuplicates;
+
+  const ballCounts = uniqueNames.length >= 2 ? distributeBalls(uniqueNames.length) : [];
+  const players = uniqueNames.map((name, i) => ({
+    name,
+    color: PLAYER_COLORS[i % PLAYER_COLORS.length],
+    initialBalls: ballCounts[i] ?? 0,
+  }));
+
+  const handleStart = useCallback(() => {
+    if (!isValid) return;
+    sessionStorage.setItem('players', JSON.stringify(players));
+    sessionStorage.setItem('map', map);
+    router.push('/game');
+  }, [isValid, players, map, router]);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div
+      style={{
+        width: '100vw',
+        height: '100vh',
+        background: '#000',
+        overflow: 'hidden',
+        position: 'relative',
+      }}
+    >
+      {players.length > 0 && (
+        <PlayerList
+          players={players}
+          scores={Array(players.length).fill(0)}
+          gameStarted={false}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+      )}
+
+      {/* Setup form — bottom-left */}
+      <div
+        style={{
+          position: 'fixed',
+          bottom: 24,
+          left: 24,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+        }}
+      >
+        <div
+          style={{
+            color: '#aaa',
+            fontSize: 13,
+            fontFamily: 'monospace',
+            marginBottom: 4,
+          }}
+        >
+          이름들을 입력하세요 (콤마로 구분, 2~30명)
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+
+        <div style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
+          {/* Textarea */}
+          <textarea
+            value={namesInput}
+            onChange={(e) => setNamesInput(e.target.value)}
+            placeholder="플레이어A, 플레이어B, 플레이어C"
+            style={{
+              width: 320,
+              height: 120,
+              background: '#111',
+              color: '#fff',
+              border: '1px solid #333',
+              borderRadius: 6,
+              padding: 10,
+              fontFamily: 'monospace',
+              fontSize: 14,
+              resize: 'none',
+              outline: 'none',
+            }}
+          />
+
+          {/* Right column */}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+              justifyContent: 'space-between',
+            }}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            <select
+              value={map}
+              onChange={(e) => setMap(e.target.value)}
+              style={{
+                background: '#111',
+                color: '#fff',
+                border: '1px solid #333',
+                borderRadius: 6,
+                padding: '6px 10px',
+                fontFamily: 'monospace',
+                fontSize: 14,
+                outline: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              <option value="default">기본맵</option>
+              <option value="windmill">빙글빙글 물레방아</option>
+            </select>
+
+            <button
+              onClick={handleStart}
+              disabled={!isValid}
+              style={{
+                background: isValid ? '#1E90FF' : '#222',
+                color: isValid ? '#fff' : '#555',
+                border: 'none',
+                borderRadius: 6,
+                padding: '10px 24px',
+                fontFamily: 'monospace',
+                fontSize: 16,
+                fontWeight: 'bold',
+                cursor: isValid ? 'pointer' : 'not-allowed',
+                flex: 1,
+              }}
+            >
+              시작
+            </button>
+          </div>
         </div>
-      </main>
+
+        {hasDuplicates && (
+          <div style={{ color: '#FF4757', fontSize: 12, fontFamily: 'monospace' }}>
+            중복된 이름이 있습니다
+          </div>
+        )}
+        {names.length > 30 && (
+          <div style={{ color: '#FF4757', fontSize: 12, fontFamily: 'monospace' }}>
+            최대 30명까지 가능합니다
+          </div>
+        )}
+      </div>
     </div>
   );
 }
