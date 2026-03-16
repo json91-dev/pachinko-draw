@@ -107,11 +107,18 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
     if (!canvas) return;
     const ctx = canvas.getContext('2d')!;
 
-    // CSS scale to fill viewport
+    // Uniform scale to fill viewport while keeping 1600×900 aspect ratio
+    let canvasScale = 1;
+    let canvasOffsetX = 0;
+    let canvasOffsetY = 0;
+
     function applyCanvasScale() {
       const sx = window.innerWidth / W;
       const sy = window.innerHeight / H;
-      canvas!.style.transform = `scale(${sx}, ${sy})`;
+      canvasScale = Math.min(sx, sy);
+      canvasOffsetX = (window.innerWidth - W * canvasScale) / 2;
+      canvasOffsetY = (window.innerHeight - H * canvasScale) / 2;
+      canvas!.style.transform = `translate(${canvasOffsetX}px, ${canvasOffsetY}px) scale(${canvasScale})`;
       canvas!.style.transformOrigin = 'top left';
     }
     applyCanvasScale();
@@ -583,11 +590,9 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
           1,
           Math.max(0, (BLACKHOLE_THRESHOLD - unfired()) / BLACKHOLE_THRESHOLD)
         );
-        const sx = window.innerWidth / W;
-        const sy = window.innerHeight / H;
-        // Hole screen position accounting for zoom
-        const holeScreenX = (HOLE_X + (HOLE_X - HOLE_X) * (zoomScale - 1)) * sx;
-        const holeScreenY = (HOLE_Y + (HOLE_Y - HOLE_Y) * (zoomScale - 1)) * sy;
+        // Hole screen position = virtual pos * canvasScale + offset
+        const holeScreenX = HOLE_X * canvasScale + canvasOffsetX;
+        const holeScreenY = HOLE_Y * canvasScale + canvasOffsetY;
         shader.render(
           now / 1000,
           holeScreenX,
@@ -599,6 +604,8 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
       }
     }
 
+    // Draw first frame synchronously so canvas is never blank when it appears
+    render(performance.now());
     rafId = requestAnimationFrame(loop);
 
     // Resize
