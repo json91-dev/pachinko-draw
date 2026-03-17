@@ -55,12 +55,10 @@ export default function Page() {
 
   // ── Setup form derived values ────────────────────────────────────────────
   const names = namesInput.split(',').map((n) => n.trim()).filter(Boolean);
-  const uniqueNames = [...new Set(names)];
-  const hasDuplicates = names.length !== uniqueNames.length;
-  const isValid = uniqueNames.length >= 2 && uniqueNames.length <= 30 && !hasDuplicates;
+  const isValid = names.length >= 2 && names.length <= 30;
 
-  const ballCounts = uniqueNames.length >= 2 ? distributeBalls(uniqueNames.length) : [];
-  const previewPlayers = uniqueNames.map((name, i) => ({
+  const ballCounts = names.length >= 2 ? distributeBalls(names.length) : [];
+  const previewPlayers = names.map((name, i) => ({
     name,
     color: PLAYER_COLORS[i % PLAYER_COLORS.length],
     initialBalls: ballCounts[i] ?? 0,
@@ -69,8 +67,8 @@ export default function Page() {
   // ── Handlers ─────────────────────────────────────────────────────────────
   const handleStart = useCallback(() => {
     if (!isValid) return;
-    const counts = distributeBalls(uniqueNames.length);
-    const newPlayers = uniqueNames.map((name, i) => ({
+    const counts = distributeBalls(names.length);
+    const newPlayers = names.map((name, i) => ({
       name,
       color: PLAYER_COLORS[i % PLAYER_COLORS.length],
       initialBalls: counts[i],
@@ -82,7 +80,7 @@ export default function Page() {
     setFormVisible(false);   // fade out form
     setPhase('playing');     // mount PachinkoBoard on top of MapPreview
     scheduleMapPreviewHide();// remove MapPreview after PachinkoBoard has drawn
-  }, [isValid, uniqueNames, map]);
+  }, [isValid, names, map]);
 
   const onScore = useCallback((playerId: number) => {
     setScores((prev) => {
@@ -99,8 +97,8 @@ export default function Page() {
 
   const handleNewGame = useCallback(() => {
     if (!isValid) return;
-    const counts = distributeBalls(uniqueNames.length);
-    const newPlayers = uniqueNames.map((name, i) => ({
+    const counts = distributeBalls(names.length);
+    const newPlayers = names.map((name, i) => ({
       name,
       color: PLAYER_COLORS[i % PLAYER_COLORS.length],
       initialBalls: counts[i],
@@ -116,7 +114,7 @@ export default function Page() {
     setShowMapPreview(true);
     setGameKey((k) => k + 1);
     scheduleMapPreviewHide();
-  }, [isValid, uniqueNames, map]);
+  }, [isValid, names, map]);
 
   // ── Shared form UI ────────────────────────────────────────────────────────
   const isPlaying = phase === 'playing';
@@ -168,9 +166,9 @@ export default function Page() {
           </button>
         </div>
       </div>
-      {hasDuplicates && (
+      {names.length > 30 && (
         <div style={{ color: '#FF4757', fontSize: 12, fontFamily: 'monospace' }}>
-          중복된 이름이 있습니다
+          최대 30명까지 가능합니다
         </div>
       )}
     </div>

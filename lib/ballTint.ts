@@ -34,21 +34,9 @@ export function createBallQueue(ballCounts: number[]): number[] {
   return queue;
 }
 
-let pinballImg: HTMLImageElement | null = null;
-
-async function loadPinballImage(): Promise<HTMLImageElement> {
-  if (pinballImg) return pinballImg;
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => { pinballImg = img; resolve(img); };
-    img.onerror = () => resolve(img); // fallback: use empty image
-    img.src = '/images/pinball.png';
-  });
-}
-
 const tintCache = new Map<string, HTMLCanvasElement>();
 
-export async function createTintedBall(color: string, diameter: number): Promise<HTMLCanvasElement> {
+export function createTintedBall(color: string, diameter: number): HTMLCanvasElement {
   const key = `${color}-${diameter}`;
   if (tintCache.has(key)) return tintCache.get(key)!;
 
@@ -56,35 +44,22 @@ export async function createTintedBall(color: string, diameter: number): Promise
   offscreen.width = diameter;
   offscreen.height = diameter;
   const ctx = offscreen.getContext('2d')!;
+  const r = diameter / 2;
 
-  // Clip to circle
   ctx.save();
   ctx.beginPath();
-  ctx.arc(diameter / 2, diameter / 2, diameter / 2, 0, Math.PI * 2);
+  ctx.arc(r, r, r, 0, Math.PI * 2);
   ctx.clip();
 
-  // Base: player color
+  // Base color
   ctx.fillStyle = color;
   ctx.fillRect(0, 0, diameter, diameter);
 
-  // Overlay pinball shading via multiply
-  try {
-    const base = await loadPinballImage();
-    if (base.complete && base.naturalWidth > 0) {
-      ctx.globalCompositeOperation = 'multiply';
-      ctx.drawImage(base, 0, 0, diameter, diameter);
-    }
-  } catch {}
-
-  // Highlight shine
-  ctx.globalCompositeOperation = 'source-over';
-  const shine = ctx.createRadialGradient(
-    diameter * 0.35, diameter * 0.3, 0,
-    diameter * 0.5, diameter * 0.5, diameter * 0.5
-  );
-  shine.addColorStop(0, 'rgba(255,255,255,0.45)');
-  shine.addColorStop(0.4, 'rgba(255,255,255,0.1)');
-  shine.addColorStop(1, 'rgba(0,0,0,0.2)');
+  // Shine highlight (top-left)
+  const shine = ctx.createRadialGradient(r * 0.6, r * 0.5, 0, r, r, r);
+  shine.addColorStop(0, 'rgba(255,255,255,0.55)');
+  shine.addColorStop(0.35, 'rgba(255,255,255,0.15)');
+  shine.addColorStop(1, 'rgba(0,0,0,0.3)');
   ctx.fillStyle = shine;
   ctx.fillRect(0, 0, diameter, diameter);
 
@@ -94,11 +69,10 @@ export async function createTintedBall(color: string, diameter: number): Promise
   return offscreen;
 }
 
-export async function preloadTintedBalls(colors: string[], diameter: number): Promise<HTMLCanvasElement[]> {
-  return Promise.all(colors.map(c => createTintedBall(c, diameter)));
+export function preloadTintedBalls(colors: string[], diameter: number): HTMLCanvasElement[] {
+  return colors.map(c => createTintedBall(c, diameter));
 }
 
 export function clearTintCache() {
   tintCache.clear();
-  pinballImg = null;
 }

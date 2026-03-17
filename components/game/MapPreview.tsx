@@ -2,11 +2,11 @@
 
 import { useEffect, useRef } from 'react';
 
-const W = 1600;
-const H = 900;
+const W = 1080;
+const H = 1920;
 
-const HOLE_X = 800;
-const HOLE_Y = 720;
+const HOLE_X = 540;
+const HOLE_Y = 1750;
 const HOLE_R = 40;
 const PIN_R = 10;
 const PIN_VISUAL_R = 13;
@@ -18,23 +18,23 @@ interface PinDef {
 
 function buildPins(map: string): PinDef[] {
   const pins: PinDef[] = [];
-  const yStart = 120;
-  const yEnd = 680;
-  const rowCount = 10;
+  const yStart = 150;
+  const yEnd = 1600;
+  const rowCount = 20;
   const rowSpacing = (yEnd - yStart) / (rowCount - 1);
   const wmCenters =
     map === 'windmill'
       ? [
-          { x: 480, y: 450 },
-          { x: 1120, y: 450 },
+          { x: 270, y: 960 },
+          { x: 810, y: 960 },
         ]
       : [];
 
   for (let r = 0; r < rowCount; r++) {
     const y = yStart + r * rowSpacing;
     const isShortRow = r % 2 === 0;
-    const count = isShortRow ? 6 : 7;
-    const spacing = isShortRow ? W / 7 : W / 8;
+    const count = isShortRow ? 4 : 5;
+    const spacing = isShortRow ? W / 5 : W / 6;
     for (let c = 0; c < count; c++) {
       const x = spacing * (c + 0.5);
       const skip = wmCenters.some((wm) => Math.hypot(x - wm.x, y - wm.y) < 150);
@@ -71,14 +71,14 @@ export default function MapPreview({ map }: Props) {
     const wmCenters =
       map === 'windmill'
         ? [
-            { x: 480, y: 450 },
-            { x: 1120, y: 450 },
+            { x: 270, y: 960 },
+            { x: 810, y: 960 },
           ]
         : [];
 
     let wmAngle = 0;
     const startTime = performance.now();
-    const CANNON_X = 800, CANNON_Y = 60;
+    const CANNON_X = 540, CANNON_Y = 80;
     const CANNON_SWING = (40 * Math.PI) / 180;
     const CANNON_PERIOD = 4000;
 

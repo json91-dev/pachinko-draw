@@ -11,21 +11,21 @@ import {
 import { checkWinner } from '@/lib/winnerCheck';
 import { BlackholeShader } from '@/lib/blackholeShader';
 
-// Virtual resolution (CSS-scaled to fill viewport)
-const W = 1600;
-const H = 900;
+// Virtual resolution — portrait 9:16, CSS-scaled uniformly to fit viewport
+const W = 1080;
+const H = 1920;
 
 const BALL_R = 10;
 const PIN_R = 10;
 const PIN_VISUAL_R = 13;
 
-const HOLE_X = 800;
-const HOLE_Y = 720;
+const HOLE_X = 540;
+const HOLE_Y = 1750;
 const HOLE_R_MIN = 40;
 const HOLE_R_MAX = 80;
 
-const CANNON_X = 800;
-const CANNON_Y = 60;
+const CANNON_X = 540;
+const CANNON_Y = 80;
 const CANNON_SWING = (40 * Math.PI) / 180; // ±40°
 const CANNON_PERIOD = 4000; // ms
 
@@ -61,25 +61,25 @@ interface WindmillState {
 
 function buildPins(map: string): PinDef[] {
   const pins: PinDef[] = [];
-  const yStart = 120;
-  const yEnd = 680;
-  const rowCount = 10;
+  const yStart = 150;
+  const yEnd = 1600;
+  const rowCount = 20;
   const rowSpacing = (yEnd - yStart) / (rowCount - 1);
 
   const wmCenters =
     map === 'windmill'
       ? [
-          { x: 480, y: 450 },
-          { x: 1120, y: 450 },
+          { x: 270, y: 960 },
+          { x: 810, y: 960 },
         ]
       : [];
 
   for (let r = 0; r < rowCount; r++) {
     const y = yStart + r * rowSpacing;
-    // r=0,2,4,6,8 → 6-pin rows; r=1,3,5,7,9 → 7-pin rows
+    // r=0,2,4,... → 4-pin rows; r=1,3,5,... → 5-pin rows
     const isShortRow = r % 2 === 0;
-    const count = isShortRow ? 6 : 7;
-    const spacing = isShortRow ? W / 7 : W / 8;
+    const count = isShortRow ? 4 : 5;
+    const spacing = isShortRow ? W / 5 : W / 6;
 
     for (let c = 0; c < count; c++) {
       const x = spacing * (c + 0.5);
@@ -160,8 +160,8 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
     const windmills: WindmillState[] = [];
     if (map === 'windmill') {
       for (const wm of [
-        { x: 480, y: 450 },
-        { x: 1120, y: 450 },
+        { x: 270, y: 960 },
+        { x: 810, y: 960 },
       ]) {
         const blades: Matter.Body[] = [];
         for (let i = 0; i < 4; i++) {
@@ -238,12 +238,7 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
     const pi = loadImg('/images/pin_128.png');
     pi.onload = () => { pinImg = pi; };
 
-    preloadTintedBalls(
-      players.map((p) => p.color),
-      BALL_R * 2
-    ).then((imgs) => {
-      tintedBalls = imgs;
-    });
+    tintedBalls = preloadTintedBalls(players.map((p) => p.color), BALL_R * 2);
 
     // ── WebGL shader ─────────────────────────────────────────────────────────
     let shader: BlackholeShader | null = null;
@@ -580,7 +575,7 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
         ctx.fillStyle = '#FF0000';
         ctx.shadowBlur = 12;
         ctx.shadowColor = '#FF0000';
-        ctx.fillText('BLACK HOLE MODE', W - 20, 56);
+        ctx.fillText('BLACK HOLE MODE', W - 16, 56);
         ctx.restore();
       }
 

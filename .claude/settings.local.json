@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(mkdir -p /Users/json91/projects/pachinko-draw/public/images && cp /Users/json91/projects/pachinko-draw/docs/images/cannon.png /Users/json91/projects/pachinko-draw/public/images/ && cp /Users/json91/projects/pachinko-draw/docs/images/hole.png /Users/json91/projects/pachinko-draw/public/images/ && cp /Users/json91/projects/pachinko-draw/docs/images/pin_128.png /Users/json91/projects/pachinko-draw/public/images/ && cp /Users/json91/projects/pachinko-draw/docs/images/pinball.png /Users/json91/projects/pachinko-draw/public/images/ && echo \"done\")",
+      "Bash(npx tsc:*)",
+      "Bash(npm run:*)"
+    ]
+  }
+}
