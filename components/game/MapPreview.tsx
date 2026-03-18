@@ -19,8 +19,8 @@ interface PinDef {
 function buildPins(map: string): PinDef[] {
   const pins: PinDef[] = [];
   const yStart = 150;
-  const yEnd = HOLE_Y - 180;
-  const rowCount = 20;
+  const yEnd = H - 120;
+  const rowCount = 14;
   const rowSpacing = (yEnd - yStart) / (rowCount - 1);
   const wmCenters =
     map === 'windmill'
@@ -110,10 +110,10 @@ export default function MapPreview({ map }: Props) {
 
       // Walls (left & right)
       ctx.save();
-      const WALL_W = 6;
-      ctx.shadowBlur = 16;
-      ctx.shadowColor = '#22FFFF';
-      ctx.fillStyle = '#22FFFF';
+      const WALL_W = 4;
+      ctx.shadowBlur = 18;
+      ctx.shadowColor = '#083E3D';
+      ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, WALL_W, H);
       ctx.fillRect(W - WALL_W, 0, WALL_W, H);
       ctx.restore();

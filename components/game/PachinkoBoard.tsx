@@ -62,8 +62,8 @@ interface WindmillState {
 function buildPins(map: string): PinDef[] {
   const pins: PinDef[] = [];
   const yStart = 150;
-  const yEnd = HOLE_Y - 180; // stop well above blackhole
-  const rowCount = 20;
+  const yEnd = H - 120; // extend to near bottom of map
+  const rowCount = 14; // fewer rows for wider vertical spacing
   const rowSpacing = (yEnd - yStart) / (rowCount - 1);
 
   const wmCenters =
@@ -198,7 +198,6 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
     const scores = Array(players.length).fill(0) as number[];
     const ballMap = new Map<number, number>(); // bodyId → playerId
     const activeBalls = new Set<Matter.Body>();
-    const ballEntrySpeed = new Map<number, number>(); // bodyId → speed when entering zone
 
     function unfired() {
       return ballQueue.length - queueIdx;
@@ -401,7 +400,6 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
           const vel = ball.velocity;
           const speed = Math.hypot(vel.x, vel.y);
           if (speed > 0.5) {
-            // Stronger steer for balls below the hole (fighting gravity)
             const belowBoost = pos.y > HOLE_Y ? 1.8 : 1.0;
             const steer = (0.08 + intensityT * 0.25) * Math.min(3, 200 / d) * belowBoost;
             const toHoleX = dx / d;
@@ -409,20 +407,9 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
             const newVx = vel.x + toHoleX * steer;
             const newVy = vel.y + toHoleY * steer;
             const newSpeed = Math.hypot(newVx, newVy);
-            // Track entry speed when ball first enters zone
-            let finalSpeed = speed;
-            if (d < 200) {
-              if (!ballEntrySpeed.has(ball.id)) {
-                ballEntrySpeed.set(ball.id, speed);
-              }
-              const entry = ballEntrySpeed.get(ball.id)!;
-              finalSpeed = Math.min(speed, entry * 0.7);
-            } else {
-              ballEntrySpeed.delete(ball.id);
-            }
             Matter.Body.setVelocity(ball, {
-              x: (newVx / newSpeed) * finalSpeed,
-              y: (newVy / newSpeed) * finalSpeed,
+              x: (newVx / newSpeed) * speed,
+              y: (newVy / newSpeed) * speed,
             });
           }
         }
@@ -431,7 +418,6 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
       for (const b of toRemove) {
         activeBalls.delete(b);
         ballMap.delete(b.id);
-        ballEntrySpeed.delete(b.id);
         Matter.World.remove(world, b);
       }
 
@@ -562,10 +548,10 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
 
       // Walls (left & right)
       ctx.save();
-      const WALL_W = 6;
-      ctx.shadowBlur = 16;
-      ctx.shadowColor = '#22FFFF';
-      ctx.fillStyle = '#22FFFF';
+      const WALL_W = 4;
+      ctx.shadowBlur = 18;
+      ctx.shadowColor = '#083E3D';
+      ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, WALL_W, H);
       ctx.fillRect(W - WALL_W, 0, WALL_W, H);
       ctx.restore();
