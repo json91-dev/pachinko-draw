@@ -133,7 +133,7 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
     applyCanvasScale();
 
     // ── Matter.js setup ──────────────────────────────────────────────────────
-    const engine = Matter.Engine.create({ gravity: { y: 1.2 } });
+    const engine = Matter.Engine.create({ gravity: { y: 0.96 } });
     const world = engine.world;
 
     // Walls
@@ -198,6 +198,7 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
     const scores = Array(players.length).fill(0) as number[];
     const ballMap = new Map<number, number>(); // bodyId → playerId
     const activeBalls = new Set<Matter.Body>();
+    const ballEntrySpeed = new Map<number, number>(); // bodyId → speed when entering zone
 
     function unfired() {
       return ballQueue.length - queueIdx;
@@ -391,27 +392,46 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
           continue;
         }
 
-        // Blackhole attraction
+        // Blackhole attraction — steer direction toward hole, preserve speed
         if (blackholeModeActive) {
           const dx = HOLE_X - pos.x;
           const dy = HOLE_Y - pos.y;
           const d = Math.max(dist, 20);
           const intensityT = Math.min(1, (BLACKHOLE_THRESHOLD - unfired()) / BLACKHOLE_THRESHOLD);
-          // Must overcome gravity (gravity ≈ 0.024 deltaV/frame)
-          // baseMag at full intensity close range: ~0.004+ deltaV/frame
-          const baseMag = 0.0024 * (0.2 + intensityT * 1.4); // 1.5x stronger
-          const proxBoost = Math.min(5, 300 / Math.max(d, 50));
-          const forceMag = baseMag * proxBoost;
-          Matter.Body.applyForce(ball, pos, {
-            x: (dx / d) * forceMag,
-            y: (dy / d) * forceMag,
-          });
+          const vel = ball.velocity;
+          const speed = Math.hypot(vel.x, vel.y);
+          if (speed > 0.5) {
+            // Stronger steer for balls below the hole (fighting gravity)
+            const belowBoost = pos.y > HOLE_Y ? 1.8 : 1.0;
+            const steer = (0.08 + intensityT * 0.25) * Math.min(3, 200 / d) * belowBoost;
+            const toHoleX = dx / d;
+            const toHoleY = dy / d;
+            const newVx = vel.x + toHoleX * steer;
+            const newVy = vel.y + toHoleY * steer;
+            const newSpeed = Math.hypot(newVx, newVy);
+            // Track entry speed when ball first enters zone
+            let finalSpeed = speed;
+            if (d < 200) {
+              if (!ballEntrySpeed.has(ball.id)) {
+                ballEntrySpeed.set(ball.id, speed);
+              }
+              const entry = ballEntrySpeed.get(ball.id)!;
+              finalSpeed = Math.min(speed, entry * 0.7);
+            } else {
+              ballEntrySpeed.delete(ball.id);
+            }
+            Matter.Body.setVelocity(ball, {
+              x: (newVx / newSpeed) * finalSpeed,
+              y: (newVy / newSpeed) * finalSpeed,
+            });
+          }
         }
       }
 
       for (const b of toRemove) {
         activeBalls.delete(b);
         ballMap.delete(b.id);
+        ballEntrySpeed.delete(b.id);
         Matter.World.remove(world, b);
       }
 
