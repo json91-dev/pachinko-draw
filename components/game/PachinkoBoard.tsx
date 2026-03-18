@@ -20,7 +20,7 @@ const PIN_R = 10;
 const PIN_VISUAL_R = 13;
 
 const HOLE_X = 540;
-const HOLE_Y = 1750;
+const HOLE_Y = 1558; // moved up ~10% from 1750
 const HOLE_R_MIN = 40;
 const HOLE_R_MAX = 80;
 
@@ -62,7 +62,7 @@ interface WindmillState {
 function buildPins(map: string): PinDef[] {
   const pins: PinDef[] = [];
   const yStart = 150;
-  const yEnd = 1600;
+  const yEnd = HOLE_Y - 180; // stop well above blackhole
   const rowCount = 20;
   const rowSpacing = (yEnd - yStart) / (rowCount - 1);
 
@@ -74,7 +74,8 @@ function buildPins(map: string): PinDef[] {
         ]
       : [];
 
-  const HOLE_EXCLUDE = HOLE_R_MAX + 65; // safe clearance around blackhole
+  const HOLE_EXCLUDE = HOLE_R_MAX + 65;
+  const WALL_PIN_MARGIN = 50;
 
   function addPin(x: number, y: number) {
     const skipWm = wmCenters.some((wm) => Math.hypot(x - wm.x, y - wm.y) < 150);
@@ -90,17 +91,9 @@ function buildPins(map: string): PinDef[] {
     for (let c = 0; c < count; c++) {
       addPin(spacing * (c + 1), y);
     }
-  }
-
-  // Extra rows flanking the blackhole (y=1625–1720)
-  const extraRows = [
-    { y: 1628, count: 4, spacing: W / 5 },
-    { y: 1672, count: 5, spacing: W / 6 },
-    { y: 1716, count: 4, spacing: W / 5 },
-  ];
-  for (const row of extraRows) {
-    for (let c = 0; c < row.count; c++) {
-      addPin(row.spacing * (c + 1), row.y);
+    if (isShortRow) {
+      addPin(WALL_PIN_MARGIN, y);
+      addPin(W - WALL_PIN_MARGIN, y);
     }
   }
 
@@ -235,6 +228,11 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
     let bhBlinkTimer = 0;
     let bhTextVisible = false;
     let bhTextSolid = false;
+
+    // Track consumed pins (absorbed by blackhole)
+    const consumedPins = new Set<number>();
+    // Suction particle max spawn radius determines the blackhole gravity field
+    const SUCTION_FIELD_RADIUS = 340; // holeRadius + 60 + 280
 
     // Suction particles
     interface SuctionParticle {
@@ -401,7 +399,7 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
           const intensityT = Math.min(1, (BLACKHOLE_THRESHOLD - unfired()) / BLACKHOLE_THRESHOLD);
           // Must overcome gravity (gravity ≈ 0.024 deltaV/frame)
           // baseMag at full intensity close range: ~0.004+ deltaV/frame
-          const baseMag = 0.0016 * (0.2 + intensityT * 1.4);
+          const baseMag = 0.0024 * (0.2 + intensityT * 1.4); // 1.5x stronger
           const proxBoost = Math.min(5, 300 / Math.max(d, 50));
           const forceMag = baseMag * proxBoost;
           Matter.Body.applyForce(ball, pos, {
@@ -443,6 +441,21 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
         }
       }
 
+      // Absorb pins within suction field
+      if (blackholeModeActive) {
+        const intensityForPins = Math.min(1, (BLACKHOLE_THRESHOLD - unfired()) / BLACKHOLE_THRESHOLD);
+        // Shrink the safe zone as intensity grows — pins get consumed progressively
+        const consumeRadius = holeRadius + 40 + intensityForPins * (SUCTION_FIELD_RADIUS - holeRadius - 40);
+        for (let i = 0; i < pinDefs.length; i++) {
+          if (consumedPins.has(i)) continue;
+          const d = Math.hypot(pinDefs[i].x - HOLE_X, pinDefs[i].y - HOLE_Y);
+          if (d < consumeRadius) {
+            consumedPins.add(i);
+            Matter.World.remove(world, pinBodies[i]);
+          }
+        }
+      }
+
       // Mode transitions
       if (!blackholeModeActive && unfired() <= BLACKHOLE_THRESHOLD) {
         blackholeModeActive = true;
@@ -453,10 +466,10 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
         if (shader) shader.active = true;
       }
 
-      if (!finaleActive && remainingForWinner() <= FINALE_THRESHOLD) {
+      if (!finaleActive && unfired() === 0) {
         finaleActive = true;
         engine.timing.timeScale = 0.25;
-        zoomTarget = 2.5;
+        zoomTarget = 1.8; // show entire blackhole + suction field
       }
 
       // Grow hole radius
@@ -627,7 +640,9 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
       ctx.restore();
 
       // Pins
-      for (const pin of pinDefs) {
+      for (let pi = 0; pi < pinDefs.length; pi++) {
+        if (consumedPins.has(pi)) continue;
+        const pin = pinDefs[pi];
         ctx.save();
         ctx.shadowBlur = 14;
         ctx.shadowColor = '#22FFFF';
@@ -793,7 +808,7 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
       // Ball count + progress bar (top-left)
       {
         const totalBalls = ballQueue.length;
-        const remaining = unfired() + inFlight();
+        const remaining = unfired();
         const fired = totalBalls - remaining;
         const progress = totalBalls > 0 ? fired / totalBalls : 1;
         const barW = 200;

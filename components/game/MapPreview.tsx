@@ -6,7 +6,7 @@ const W = 1080;
 const H = 1920;
 
 const HOLE_X = 540;
-const HOLE_Y = 1750;
+const HOLE_Y = 1558; // moved up ~10% from 1750
 const HOLE_R = 40;
 const PIN_R = 10;
 const PIN_VISUAL_R = 13;
@@ -19,7 +19,7 @@ interface PinDef {
 function buildPins(map: string): PinDef[] {
   const pins: PinDef[] = [];
   const yStart = 150;
-  const yEnd = 1600;
+  const yEnd = HOLE_Y - 180;
   const rowCount = 20;
   const rowSpacing = (yEnd - yStart) / (rowCount - 1);
   const wmCenters =
@@ -30,7 +30,8 @@ function buildPins(map: string): PinDef[] {
         ]
       : [];
 
-  const HOLE_EXCLUDE = 145; // HOLE_R_MAX(80) + 65 clearance
+  const HOLE_EXCLUDE = 145;
+  const WALL_PIN_MARGIN = 50;
 
   function addPin(x: number, y: number) {
     const skipWm = wmCenters.some((wm) => Math.hypot(x - wm.x, y - wm.y) < 150);
@@ -46,17 +47,9 @@ function buildPins(map: string): PinDef[] {
     for (let c = 0; c < count; c++) {
       addPin(spacing * (c + 1), y);
     }
-  }
-
-  // Extra rows flanking the blackhole
-  const extraRows = [
-    { y: 1628, count: 4, spacing: W / 5 },
-    { y: 1672, count: 5, spacing: W / 6 },
-    { y: 1716, count: 4, spacing: W / 5 },
-  ];
-  for (const row of extraRows) {
-    for (let c = 0; c < row.count; c++) {
-      addPin(row.spacing * (c + 1), row.y);
+    if (isShortRow) {
+      addPin(WALL_PIN_MARGIN, y);
+      addPin(W - WALL_PIN_MARGIN, y);
     }
   }
 
