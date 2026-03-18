@@ -32,7 +32,7 @@ const CANNON_PERIOD = 4000; // ms
 const FIRE_MS = 40;
 
 const BLACKHOLE_THRESHOLD = 200;
-const FINALE_THRESHOLD = 10;
+const FINALE_THRESHOLD = 70;
 
 interface Player {
   name: string;
@@ -141,7 +141,7 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
       Matter.Bodies.circle(p.x, p.y, PIN_R, {
         isStatic: true,
         friction: 0,
-        restitution: 0.5,
+        restitution: 0.65,
         label: 'pin',
       })
     );
@@ -220,6 +220,17 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
     let bhTextVisible = false;
     let bhTextSolid = false;
 
+    // Suction particles
+    interface SuctionParticle {
+      angle: number;
+      dist: number;
+      angularSpeed: number;
+      size: number;
+      alpha: number;
+      hue: number;
+    }
+    const suctionParticles: SuctionParticle[] = [];
+
     // ── Images ──────────────────────────────────────────────────────────────
     let pinImg: HTMLImageElement | null = null;
     let tintedBalls: HTMLCanvasElement[] = [];
@@ -252,42 +263,34 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
     }
 
     // ── Ball firing (3 barrels) ─────────────────────────────────────────────
-    const LATERAL_OFFSET = 18;
-    const BARREL_LENGTH = 55;
+    const BARREL_LENGTH = 60;
+    const BARREL_SPREAD = 14 * Math.PI / 180;
 
     function fireBall() {
       if (queueIdx >= ballQueue.length) return;
 
-      const forwardX = Math.sin(cannonAngle);
-      const forwardY = Math.cos(cannonAngle);
-      const perpX = Math.cos(cannonAngle);
-      const perpY = -Math.sin(cannonAngle);
+      const barrelOffsets = [-BARREL_SPREAD, 0, BARREL_SPREAD];
+      const speed = 9;
 
-      const barrels = [
-        { lateralOffset: -LATERAL_OFFSET, dir: cannonAngle - 15 * Math.PI / 180 },
-        { lateralOffset: 0,               dir: cannonAngle },
-        { lateralOffset: +LATERAL_OFFSET, dir: cannonAngle + 15 * Math.PI / 180 },
-      ];
-
-      const speed = 8;
-
-      for (const barrel of barrels) {
+      for (const offset of barrelOffsets) {
         if (queueIdx >= ballQueue.length) break;
         const playerId = ballQueue[queueIdx++];
 
-        const spawnX = CANNON_X + barrel.lateralOffset * perpX + Math.sin(barrel.dir) * BARREL_LENGTH;
-        const spawnY = CANNON_Y + barrel.lateralOffset * perpY + Math.cos(barrel.dir) * BARREL_LENGTH + BALL_R;
+        const dir = cannonAngle + offset;
+        // Cannon fires downward: forward direction is +Y
+        const spawnX = CANNON_X + Math.sin(dir) * BARREL_LENGTH;
+        const spawnY = CANNON_Y + Math.cos(dir) * BARREL_LENGTH + BALL_R;
 
         const ball = Matter.Bodies.circle(spawnX, spawnY, BALL_R, {
-          restitution: 0.5,
-          friction: 0.05,
-          frictionAir: 0.005,
-          density: 0.002,
+          restitution: 0.72,
+          friction: 0.03,
+          frictionAir: 0.004,
+          density: 0.004,
           label: 'ball',
         });
         Matter.Body.setVelocity(ball, {
-          x: Math.sin(barrel.dir) * speed,
-          y: Math.cos(barrel.dir) * speed,
+          x: Math.sin(dir) * speed,
+          y: Math.cos(dir) * speed,
         });
         Matter.World.add(world, ball);
         ballMap.set(ball.id, playerId);
@@ -393,6 +396,32 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
         Matter.World.remove(world, b);
       }
 
+      // Suction particles: spawn + update when blackhole active
+      if (blackholeModeActive) {
+        const intensity = Math.min(1, (BLACKHOLE_THRESHOLD - unfired()) / BLACKHOLE_THRESHOLD);
+        if (Math.random() < 0.4 + intensity * 0.4) {
+          suctionParticles.push({
+            angle: Math.random() * Math.PI * 2,
+            dist: holeRadius + 60 + Math.random() * 280,
+            angularSpeed: 0.015 + Math.random() * 0.025,
+            size: 1.5 + Math.random() * 3,
+            alpha: 0.7 + Math.random() * 0.3,
+            hue: 260 + Math.random() * 60,
+          });
+        }
+        for (const p of suctionParticles) {
+          p.angle += p.angularSpeed * (1 + 40 / Math.max(p.dist, 10));
+          p.dist -= 1.2 + (holeRadius * 3) / Math.max(p.dist, 20);
+          p.alpha -= 0.006;
+        }
+        // Remove consumed particles
+        for (let i = suctionParticles.length - 1; i >= 0; i--) {
+          if (suctionParticles[i].dist <= holeRadius + 2 || suctionParticles[i].alpha <= 0) {
+            suctionParticles.splice(i, 1);
+          }
+        }
+      }
+
       // Mode transitions
       if (!blackholeModeActive && unfired() <= BLACKHOLE_THRESHOLD) {
         blackholeModeActive = true;
@@ -403,7 +432,7 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
         if (shader) shader.active = true;
       }
 
-      if (!finaleActive && unfired() <= FINALE_THRESHOLD) {
+      if (!finaleActive && remainingForWinner() <= FINALE_THRESHOLD) {
         finaleActive = true;
         engine.timing.timeScale = 0.25;
         zoomTarget = 2.5;
@@ -487,45 +516,93 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
       ctx.fillRect(W - WALL_W, 0, WALL_W, H);
       ctx.restore();
 
-      // Hole — concentric rings + dark vortex
+      // ── Blackhole ──────────────────────────────────────────────────────────
       ctx.save();
-      // Outer glow ring
-      ctx.shadowBlur = 40;
-      ctx.shadowColor = '#6600cc';
-      ctx.strokeStyle = '#4400aa';
-      ctx.lineWidth = 3;
+      const spiralTime = now / 900;
+      const bhIntensity = blackholeModeActive
+        ? Math.min(1, (BLACKHOLE_THRESHOLD - unfired()) / BLACKHOLE_THRESHOLD)
+        : 0;
+
+      // Suction particles (draw first, behind hole)
+      for (const p of suctionParticles) {
+        const px = HOLE_X + Math.cos(p.angle) * p.dist;
+        const py = HOLE_Y + Math.sin(p.angle) * p.dist;
+        ctx.save();
+        ctx.globalAlpha = p.alpha;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = `hsl(${p.hue}, 100%, 65%)`;
+        ctx.fillStyle = `hsl(${p.hue}, 100%, 65%)`;
+        ctx.beginPath();
+        ctx.arc(px, py, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Accretion disk (glowing ring around hole)
+      const diskR = holeRadius + 18 + bhIntensity * 14;
+      const accGrad = ctx.createRadialGradient(HOLE_X, HOLE_Y, holeRadius, HOLE_X, HOLE_Y, diskR + 20);
+      accGrad.addColorStop(0, `rgba(255, 120, 0, ${0.6 + bhIntensity * 0.3})`);
+      accGrad.addColorStop(0.4, `rgba(180, 0, 120, ${0.3 + bhIntensity * 0.2})`);
+      accGrad.addColorStop(1, 'rgba(80, 0, 200, 0)');
+      ctx.fillStyle = accGrad;
       ctx.beginPath();
-      ctx.arc(HOLE_X, HOLE_Y, holeRadius + 12, 0, Math.PI * 2);
+      ctx.arc(HOLE_X, HOLE_Y, diskR + 20, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Bright event horizon ring
+      ctx.shadowBlur = 50 + bhIntensity * 30;
+      ctx.shadowColor = '#ff6600';
+      ctx.strokeStyle = `rgba(255, ${120 - bhIntensity * 80}, 0, ${0.8 + bhIntensity * 0.2})`;
+      ctx.lineWidth = 3 + bhIntensity * 2;
+      ctx.beginPath();
+      ctx.arc(HOLE_X, HOLE_Y, holeRadius + 2, 0, Math.PI * 2);
       ctx.stroke();
-      // Middle ring
-      ctx.shadowBlur = 0;
-      ctx.strokeStyle = '#8800ff';
+
+      // Outer purple ring
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = '#8800ff';
+      ctx.strokeStyle = '#6600cc';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(HOLE_X, HOLE_Y, holeRadius, 0, Math.PI * 2);
+      ctx.arc(HOLE_X, HOLE_Y, holeRadius + 14, 0, Math.PI * 2);
       ctx.stroke();
-      // Dark center
-      const grad = ctx.createRadialGradient(HOLE_X, HOLE_Y, 0, HOLE_X, HOLE_Y, holeRadius - 6);
-      grad.addColorStop(0, '#1a0018');
-      grad.addColorStop(1, '#000000');
-      ctx.fillStyle = grad;
+
+      // Dark singularity center with gravitational lens highlight
+      const lensGrad = ctx.createRadialGradient(
+        HOLE_X - holeRadius * 0.25, HOLE_Y - holeRadius * 0.25, 0,
+        HOLE_X, HOLE_Y, holeRadius
+      );
+      lensGrad.addColorStop(0, '#0d0020');
+      lensGrad.addColorStop(0.6, '#000000');
+      lensGrad.addColorStop(1, '#000008');
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = lensGrad;
       ctx.beginPath();
-      ctx.arc(HOLE_X, HOLE_Y, holeRadius - 6, 0, Math.PI * 2);
+      ctx.arc(HOLE_X, HOLE_Y, holeRadius, 0, Math.PI * 2);
       ctx.fill();
-      // Rotating spiral lines
-      const spiralTime = now / 1000;
-      ctx.strokeStyle = 'rgba(150,0,255,0.4)';
+
+      // Spiral arms (6 arms, faster rotation)
+      const armCount = 6;
       ctx.lineWidth = 1.5;
-      for (let i = 0; i < 3; i++) {
-        const a = spiralTime + i * (2 * Math.PI / 3);
+      for (let i = 0; i < armCount; i++) {
+        const a = spiralTime * 2 + i * (Math.PI * 2 / armCount);
+        const opacity = (0.25 + 0.25 * Math.sin(spiralTime * 3 + i)) * (0.5 + bhIntensity * 0.5);
+        ctx.strokeStyle = `rgba(200, 60, 255, ${opacity})`;
         ctx.beginPath();
         ctx.moveTo(HOLE_X, HOLE_Y);
         ctx.lineTo(
-          HOLE_X + Math.cos(a) * (holeRadius - 8),
-          HOLE_Y + Math.sin(a) * (holeRadius - 8)
+          HOLE_X + Math.cos(a) * (holeRadius - 4),
+          HOLE_Y + Math.sin(a) * (holeRadius - 4)
         );
         ctx.stroke();
       }
+
+      // Lens flare dot
+      ctx.fillStyle = 'rgba(255, 200, 255, 0.15)';
+      ctx.beginPath();
+      ctx.arc(HOLE_X - holeRadius * 0.3, HOLE_Y - holeRadius * 0.3, holeRadius * 0.18, 0, Math.PI * 2);
+      ctx.fill();
+
       ctx.restore();
 
       // Pins
@@ -586,37 +663,150 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
         }
       }
 
-      // Cannon — 3 barrels + hub
+      // ── Cannon ────────────────────────────────────────────────────────────
       ctx.save();
       ctx.translate(CANNON_X, CANNON_Y);
       ctx.rotate(cannonAngle);
-      // Draw 3 barrels
-      const barrelAngles = [-15 * Math.PI / 180, 0, 15 * Math.PI / 180];
-      const barrelLateral = [-18, 0, 18];
-      ctx.fillStyle = '#22FFFF';
-      ctx.shadowBlur = 12;
+
+      // Carriage base (behind barrels)
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = '#0099bb';
+      ctx.fillStyle = '#0d4460';
+      ctx.beginPath();
+      ctx.roundRect(-38, 6, 76, 22, 5);
+      ctx.fill();
+      ctx.fillStyle = '#0a3348';
+      ctx.beginPath();
+      ctx.roundRect(-36, 8, 72, 18, 4);
+      ctx.fill();
+
+      // Wheels
+      ctx.shadowBlur = 6;
       ctx.shadowColor = '#22FFFF';
+      for (const wx of [-24, 24]) {
+        ctx.fillStyle = '#0d4460';
+        ctx.beginPath();
+        ctx.arc(wx, 24, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#22FFFF';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(wx, 24, 12, 0, Math.PI * 2);
+        ctx.stroke();
+        // Spokes
+        ctx.lineWidth = 1.5;
+        for (let s = 0; s < 6; s++) {
+          const sa = s * Math.PI / 3;
+          ctx.beginPath();
+          ctx.moveTo(wx, 24);
+          ctx.lineTo(wx + Math.cos(sa) * 9, 24 + Math.sin(sa) * 9);
+          ctx.stroke();
+        }
+        ctx.fillStyle = '#22FFFF';
+        ctx.beginPath();
+        ctx.arc(wx, 24, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 3 Barrels (pointing downward / forward)
+      const cannonBarrelAngles = [-BARREL_SPREAD, 0, BARREL_SPREAD];
       for (let i = 0; i < 3; i++) {
         ctx.save();
-        ctx.rotate(barrelAngles[i]);
-        ctx.translate(barrelLateral[i], 0);
+        ctx.rotate(cannonBarrelAngles[i]);
+        // Barrel body
+        ctx.shadowBlur = 14;
+        ctx.shadowColor = '#22FFFF';
+        ctx.fillStyle = '#1a7a9a';
         ctx.beginPath();
-        ctx.roundRect(-6, -5, 12, 45, 4);
+        ctx.roundRect(-5, 2, 10, 52, [2, 2, 5, 5]);
+        ctx.fill();
+        // Barrel highlight
+        ctx.fillStyle = '#22FFFF';
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.roundRect(-4, 3, 4, 50, [2, 2, 3, 3]);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        // Muzzle ring
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = '#22FFFF';
+        ctx.fillStyle = '#22FFFF';
+        ctx.beginPath();
+        ctx.roundRect(-6, 46, 12, 8, 3);
+        ctx.fill();
+        // Breech ring
+        ctx.fillStyle = '#0AEEEE';
+        ctx.beginPath();
+        ctx.roundRect(-6, 2, 12, 7, 2);
         ctx.fill();
         ctx.restore();
       }
-      // Center hub
-      ctx.shadowBlur = 12;
+
+      // Hub (pivot)
+      ctx.shadowBlur = 18;
       ctx.shadowColor = '#22FFFF';
+      ctx.fillStyle = '#0d4460';
+      ctx.beginPath();
+      ctx.arc(0, 0, 18, 0, Math.PI * 2);
+      ctx.fill();
       ctx.fillStyle = '#0AEEEE';
       ctx.beginPath();
-      ctx.arc(0, 0, 20, 0, Math.PI * 2);
+      ctx.arc(0, 0, 13, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = '#22FFFF';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, 18, 0, Math.PI * 2);
+      ctx.stroke();
+      // Hub center dot
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(0, 0, 4, 0, Math.PI * 2);
+      ctx.fill();
+
       ctx.restore();
 
       ctx.restore(); // zoom
 
       // ── HUD (not zoomed) ────────────────────────────────────────────────
+      // Ball count + progress bar (top-left)
+      {
+        const totalBalls = ballQueue.length;
+        const remaining = unfired() + inFlight();
+        const fired = totalBalls - remaining;
+        const progress = totalBalls > 0 ? fired / totalBalls : 1;
+        const barW = 200;
+        const barH = 10;
+        const bx = 16;
+        const by = 24;
+
+        ctx.save();
+        // Label
+        ctx.font = 'bold 20px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#aaaaaa';
+        ctx.shadowBlur = 0;
+        ctx.fillText(`남은 공: ${remaining}`, bx, by);
+        // Bar background
+        ctx.fillStyle = '#222233';
+        ctx.beginPath();
+        ctx.roundRect(bx, by + 6, barW, barH, 4);
+        ctx.fill();
+        // Bar fill with gradient
+        if (progress > 0) {
+          const barGrad = ctx.createLinearGradient(bx, 0, bx + barW, 0);
+          barGrad.addColorStop(0, '#22FFFF');
+          barGrad.addColorStop(1, '#8800ff');
+          ctx.fillStyle = barGrad;
+          ctx.shadowBlur = 6;
+          ctx.shadowColor = '#22FFFF';
+          ctx.beginPath();
+          ctx.roundRect(bx, by + 6, barW * progress, barH, 4);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
       if (blackholeModeActive && (bhTextSolid || bhTextVisible)) {
         ctx.save();
         ctx.font = 'bold 28px monospace';

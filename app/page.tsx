@@ -24,7 +24,7 @@ const MAP_LINGER_MS = 150;
 export default function Page() {
   // ── Setup form state ─────────────────────────────────────────────────────
   const [namesInput, setNamesInput] = useState('');
-  const [map, setMap] = useState('default');
+  const [map, setMap] = useState('windmill');
 
   // ── Phase ────────────────────────────────────────────────────────────────
   const [phase, setPhase] = useState<'setup' | 'playing'>('setup');
@@ -147,7 +147,6 @@ export default function Page() {
               outline: 'none', cursor: 'pointer',
             }}
           >
-            <option value="default">기본맵</option>
             <option value="windmill">빙글빙글 물레방아</option>
           </select>
           <button
