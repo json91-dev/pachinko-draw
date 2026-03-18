@@ -83,21 +83,11 @@ export default function MapPreview({ map }: Props) {
     const CANNON_PERIOD = 4000;
 
     // Load images
-    let holeImg: HTMLImageElement | null = null;
     let pinImg: HTMLImageElement | null = null;
-    let cannonImg: HTMLImageElement | null = null;
-
-    const hi = new Image();
-    hi.onload = () => { holeImg = hi; };
-    hi.src = '/images/hole.png';
 
     const pi = new Image();
     pi.onload = () => { pinImg = pi; };
     pi.src = '/images/pin_128.png';
-
-    const ci = new Image();
-    ci.onload = () => { cannonImg = ci; };
-    ci.src = '/images/cannon.png';
 
     function draw(now: number) {
       rafRef.current = requestAnimationFrame(draw);
@@ -116,17 +106,44 @@ export default function MapPreview({ map }: Props) {
       ctx.fillRect(W - WALL_W, 0, WALL_W, H);
       ctx.restore();
 
-      // Hole
+      // Hole — concentric rings + dark vortex
       ctx.save();
-      if (holeImg && holeImg.naturalWidth > 0) {
-        ctx.drawImage(holeImg, HOLE_X - HOLE_R, HOLE_Y - HOLE_R, HOLE_R * 2, HOLE_R * 2);
-      } else {
-        ctx.fillStyle = '#1a0a2e';
-        ctx.shadowBlur = 30;
-        ctx.shadowColor = '#6600cc';
+      // Outer glow ring
+      ctx.shadowBlur = 40;
+      ctx.shadowColor = '#6600cc';
+      ctx.strokeStyle = '#4400aa';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(HOLE_X, HOLE_Y, HOLE_R + 12, 0, Math.PI * 2);
+      ctx.stroke();
+      // Middle ring
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = '#8800ff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(HOLE_X, HOLE_Y, HOLE_R, 0, Math.PI * 2);
+      ctx.stroke();
+      // Dark center
+      const holeGrad = ctx.createRadialGradient(HOLE_X, HOLE_Y, 0, HOLE_X, HOLE_Y, HOLE_R - 6);
+      holeGrad.addColorStop(0, '#1a0018');
+      holeGrad.addColorStop(1, '#000000');
+      ctx.fillStyle = holeGrad;
+      ctx.beginPath();
+      ctx.arc(HOLE_X, HOLE_Y, HOLE_R - 6, 0, Math.PI * 2);
+      ctx.fill();
+      // Rotating spiral lines
+      const spiralTime = now / 1000;
+      ctx.strokeStyle = 'rgba(150,0,255,0.4)';
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < 3; i++) {
+        const a = spiralTime + i * (2 * Math.PI / 3);
         ctx.beginPath();
-        ctx.arc(HOLE_X, HOLE_Y, HOLE_R, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(HOLE_X, HOLE_Y);
+        ctx.lineTo(
+          HOLE_X + Math.cos(a) * (HOLE_R - 8),
+          HOLE_Y + Math.sin(a) * (HOLE_R - 8)
+        );
+        ctx.stroke();
       }
       ctx.restore();
 
@@ -174,24 +191,34 @@ export default function MapPreview({ map }: Props) {
         ctx.restore();
       }
 
-      // Cannon (swinging, same as PachinkoBoard)
+      // Cannon — 3 barrels + hub (swinging)
       const cannonAngle =
         Math.sin(((now - startTime) / CANNON_PERIOD) * Math.PI * 2) * CANNON_SWING;
       ctx.save();
       ctx.translate(CANNON_X, CANNON_Y);
       ctx.rotate(cannonAngle);
-      if (cannonImg && cannonImg.naturalWidth > 0) {
-        ctx.drawImage(cannonImg, -40, -40, 80, 80);
-      } else {
-        ctx.fillStyle = '#888';
+      // Draw 3 barrels
+      const barrelAngles = [-15 * Math.PI / 180, 0, 15 * Math.PI / 180];
+      const barrelLateral = [-18, 0, 18];
+      ctx.fillStyle = '#22FFFF';
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = '#22FFFF';
+      for (let bi = 0; bi < 3; bi++) {
+        ctx.save();
+        ctx.rotate(barrelAngles[bi]);
+        ctx.translate(barrelLateral[bi], 0);
         ctx.beginPath();
-        ctx.roundRect(-14, -14, 28, 60, 4);
+        ctx.roundRect(-6, -5, 12, 45, 4);
         ctx.fill();
-        ctx.fillStyle = '#aaa';
-        ctx.beginPath();
-        ctx.arc(0, 0, 18, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.restore();
       }
+      // Center hub
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = '#22FFFF';
+      ctx.fillStyle = '#0AEEEE';
+      ctx.beginPath();
+      ctx.arc(0, 0, 20, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
     }
 

@@ -221,22 +221,12 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
     let bhTextSolid = false;
 
     // ── Images ──────────────────────────────────────────────────────────────
-    let cannonImg: HTMLImageElement | null = null;
-    let holeImg: HTMLImageElement | null = null;
     let pinImg: HTMLImageElement | null = null;
     let tintedBalls: HTMLCanvasElement[] = [];
 
-    const loadImg = (src: string) => {
-      const img = new Image();
-      img.src = src;
-      return img;
-    };
-    const ci = loadImg('/images/cannon.png');
-    ci.onload = () => { cannonImg = ci; };
-    const hi = loadImg('/images/hole.png');
-    hi.onload = () => { holeImg = hi; };
-    const pi = loadImg('/images/pin_128.png');
+    const pi = new Image();
     pi.onload = () => { pinImg = pi; };
+    pi.src = '/images/pin_128.png';
 
     tintedBalls = preloadTintedBalls(players.map((p) => p.color), BALL_R * 2);
 
@@ -261,28 +251,48 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
       Matter.World.add(world, holeSensor);
     }
 
-    // ── Ball firing ──────────────────────────────────────────────────────────
+    // ── Ball firing (3 barrels) ─────────────────────────────────────────────
+    const LATERAL_OFFSET = 18;
+    const BARREL_LENGTH = 55;
+
     function fireBall() {
       if (queueIdx >= ballQueue.length) return;
-      const playerId = ballQueue[queueIdx++];
 
-      const dx = Math.sin(cannonAngle);
-      const dy = Math.cos(cannonAngle);
-      const spawnX = CANNON_X + dx * 45;
-      const spawnY = CANNON_Y + dy * 45 + BALL_R;
+      const forwardX = Math.sin(cannonAngle);
+      const forwardY = Math.cos(cannonAngle);
+      const perpX = Math.cos(cannonAngle);
+      const perpY = -Math.sin(cannonAngle);
+
+      const barrels = [
+        { lateralOffset: -LATERAL_OFFSET, dir: cannonAngle - 15 * Math.PI / 180 },
+        { lateralOffset: 0,               dir: cannonAngle },
+        { lateralOffset: +LATERAL_OFFSET, dir: cannonAngle + 15 * Math.PI / 180 },
+      ];
+
       const speed = 8;
 
-      const ball = Matter.Bodies.circle(spawnX, spawnY, BALL_R, {
-        restitution: 0.5,
-        friction: 0.05,
-        frictionAir: 0.005,
-        density: 0.002,
-        label: `ball`,
-      });
-      Matter.Body.setVelocity(ball, { x: dx * speed, y: dy * speed });
-      Matter.World.add(world, ball);
-      ballMap.set(ball.id, playerId);
-      activeBalls.add(ball);
+      for (const barrel of barrels) {
+        if (queueIdx >= ballQueue.length) break;
+        const playerId = ballQueue[queueIdx++];
+
+        const spawnX = CANNON_X + barrel.lateralOffset * perpX + Math.sin(barrel.dir) * BARREL_LENGTH;
+        const spawnY = CANNON_Y + barrel.lateralOffset * perpY + Math.cos(barrel.dir) * BARREL_LENGTH + BALL_R;
+
+        const ball = Matter.Bodies.circle(spawnX, spawnY, BALL_R, {
+          restitution: 0.5,
+          friction: 0.05,
+          frictionAir: 0.005,
+          density: 0.002,
+          label: 'ball',
+        });
+        Matter.Body.setVelocity(ball, {
+          x: Math.sin(barrel.dir) * speed,
+          y: Math.cos(barrel.dir) * speed,
+        });
+        Matter.World.add(world, ball);
+        ballMap.set(ball.id, playerId);
+        activeBalls.add(ball);
+      }
     }
 
     // ── Winner trigger ───────────────────────────────────────────────────────
@@ -477,23 +487,44 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
       ctx.fillRect(W - WALL_W, 0, WALL_W, H);
       ctx.restore();
 
-      // Hole
+      // Hole — concentric rings + dark vortex
       ctx.save();
-      if (holeImg && holeImg.naturalWidth > 0) {
-        ctx.drawImage(
-          holeImg,
-          HOLE_X - holeRadius,
-          HOLE_Y - holeRadius,
-          holeRadius * 2,
-          holeRadius * 2
-        );
-      } else {
-        ctx.fillStyle = '#1a0a2e';
-        ctx.shadowBlur = 30;
-        ctx.shadowColor = '#6600cc';
+      // Outer glow ring
+      ctx.shadowBlur = 40;
+      ctx.shadowColor = '#6600cc';
+      ctx.strokeStyle = '#4400aa';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(HOLE_X, HOLE_Y, holeRadius + 12, 0, Math.PI * 2);
+      ctx.stroke();
+      // Middle ring
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = '#8800ff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(HOLE_X, HOLE_Y, holeRadius, 0, Math.PI * 2);
+      ctx.stroke();
+      // Dark center
+      const grad = ctx.createRadialGradient(HOLE_X, HOLE_Y, 0, HOLE_X, HOLE_Y, holeRadius - 6);
+      grad.addColorStop(0, '#1a0018');
+      grad.addColorStop(1, '#000000');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(HOLE_X, HOLE_Y, holeRadius - 6, 0, Math.PI * 2);
+      ctx.fill();
+      // Rotating spiral lines
+      const spiralTime = now / 1000;
+      ctx.strokeStyle = 'rgba(150,0,255,0.4)';
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < 3; i++) {
+        const a = spiralTime + i * (2 * Math.PI / 3);
         ctx.beginPath();
-        ctx.arc(HOLE_X, HOLE_Y, holeRadius, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(HOLE_X, HOLE_Y);
+        ctx.lineTo(
+          HOLE_X + Math.cos(a) * (holeRadius - 8),
+          HOLE_Y + Math.sin(a) * (holeRadius - 8)
+        );
+        ctx.stroke();
       }
       ctx.restore();
 
@@ -555,24 +586,32 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
         }
       }
 
-      // Cannon
+      // Cannon — 3 barrels + hub
       ctx.save();
       ctx.translate(CANNON_X, CANNON_Y);
       ctx.rotate(cannonAngle);
-      if (cannonImg && cannonImg.naturalWidth > 0) {
-        // cannon.png drawn centered, pointing downward
-        ctx.drawImage(cannonImg, -40, -40, 80, 80);
-      } else {
-        // Fallback: simple cannon shape
-        ctx.fillStyle = '#888';
+      // Draw 3 barrels
+      const barrelAngles = [-15 * Math.PI / 180, 0, 15 * Math.PI / 180];
+      const barrelLateral = [-18, 0, 18];
+      ctx.fillStyle = '#22FFFF';
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = '#22FFFF';
+      for (let i = 0; i < 3; i++) {
+        ctx.save();
+        ctx.rotate(barrelAngles[i]);
+        ctx.translate(barrelLateral[i], 0);
         ctx.beginPath();
-        ctx.roundRect(-14, -14, 28, 60, 4);
+        ctx.roundRect(-6, -5, 12, 45, 4);
         ctx.fill();
-        ctx.fillStyle = '#aaa';
-        ctx.beginPath();
-        ctx.arc(0, 0, 18, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.restore();
       }
+      // Center hub
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = '#22FFFF';
+      ctx.fillStyle = '#0AEEEE';
+      ctx.beginPath();
+      ctx.arc(0, 0, 20, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
 
       ctx.restore(); // zoom
