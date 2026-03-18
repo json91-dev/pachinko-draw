@@ -32,7 +32,7 @@ const CANNON_PERIOD = 4000; // ms
 const FIRE_MS = 40;
 
 const BLACKHOLE_THRESHOLD = 200;
-const FINALE_THRESHOLD = 70;
+const FINALE_THRESHOLD = 150;
 
 interface Player {
   name: string;
@@ -74,20 +74,36 @@ function buildPins(map: string): PinDef[] {
         ]
       : [];
 
+  const HOLE_EXCLUDE = HOLE_R_MAX + 65; // safe clearance around blackhole
+
+  function addPin(x: number, y: number) {
+    const skipWm = wmCenters.some((wm) => Math.hypot(x - wm.x, y - wm.y) < 150);
+    const skipHole = Math.hypot(x - HOLE_X, y - HOLE_Y) < HOLE_EXCLUDE;
+    if (!skipWm && !skipHole) pins.push({ x, y });
+  }
+
   for (let r = 0; r < rowCount; r++) {
     const y = yStart + r * rowSpacing;
-    // r=0,2,4,... → 4-pin rows; r=1,3,5,... → 5-pin rows
     const isShortRow = r % 2 === 0;
     const count = isShortRow ? 4 : 5;
     const spacing = isShortRow ? W / 5 : W / 6;
-
     for (let c = 0; c < count; c++) {
-      const x = spacing * (c + 1);
-      // Skip pins that would overlap windmill blades
-      const skip = wmCenters.some((wm) => Math.hypot(x - wm.x, y - wm.y) < 150);
-      if (!skip) pins.push({ x, y });
+      addPin(spacing * (c + 1), y);
     }
   }
+
+  // Extra rows flanking the blackhole (y=1625–1720)
+  const extraRows = [
+    { y: 1628, count: 4, spacing: W / 5 },
+    { y: 1672, count: 5, spacing: W / 6 },
+    { y: 1716, count: 4, spacing: W / 5 },
+  ];
+  for (const row of extraRows) {
+    for (let c = 0; c < row.count; c++) {
+      addPin(row.spacing * (c + 1), row.y);
+    }
+  }
+
   return pins;
 }
 
@@ -124,7 +140,7 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
     applyCanvasScale();
 
     // ── Matter.js setup ──────────────────────────────────────────────────────
-    const engine = Matter.Engine.create({ gravity: { y: 1.5 } });
+    const engine = Matter.Engine.create({ gravity: { y: 1.2 } });
     const world = engine.world;
 
     // Walls
@@ -269,7 +285,8 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
     function fireBall() {
       if (queueIdx >= ballQueue.length) return;
 
-      const barrelOffsets = [-BARREL_SPREAD, 0, BARREL_SPREAD];
+      // const barrelOffsets = [-BARREL_SPREAD, 0, BARREL_SPREAD]; // 3줄기
+      const barrelOffsets = [0]; // 1줄기
       const speed = 9;
 
       for (const offset of barrelOffsets) {
@@ -277,8 +294,8 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
         const playerId = ballQueue[queueIdx++];
 
         const dir = cannonAngle + offset;
-        // Cannon fires downward: forward direction is +Y
-        const spawnX = CANNON_X + Math.sin(dir) * BARREL_LENGTH;
+        // Canvas CW rotation: x' = -length*sin(θ), y' = length*cos(θ)
+        const spawnX = CANNON_X - Math.sin(dir) * BARREL_LENGTH;
         const spawnY = CANNON_Y + Math.cos(dir) * BARREL_LENGTH + BALL_R;
 
         const ball = Matter.Bodies.circle(spawnX, spawnY, BALL_R, {
@@ -289,7 +306,7 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
           label: 'ball',
         });
         Matter.Body.setVelocity(ball, {
-          x: Math.sin(dir) * speed,
+          x: -Math.sin(dir) * speed,
           y: Math.cos(dir) * speed,
         });
         Matter.World.add(world, ball);
@@ -382,7 +399,11 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
           const dy = HOLE_Y - pos.y;
           const d = Math.max(dist, 20);
           const intensityT = Math.min(1, (BLACKHOLE_THRESHOLD - unfired()) / BLACKHOLE_THRESHOLD);
-          const forceMag = 0.000015 * intensityT * (1 + intensityT);
+          // Must overcome gravity (gravity ≈ 0.024 deltaV/frame)
+          // baseMag at full intensity close range: ~0.004+ deltaV/frame
+          const baseMag = 0.0016 * (0.2 + intensityT * 1.4);
+          const proxBoost = Math.min(5, 300 / Math.max(d, 50));
+          const forceMag = baseMag * proxBoost;
           Matter.Body.applyForce(ball, pos, {
             x: (dx / d) * forceMag,
             y: (dy / d) * forceMag,

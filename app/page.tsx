@@ -16,9 +16,6 @@ interface Player {
   initialBalls: number;
 }
 
-// How long to keep MapPreview alive after PachinkoBoard mounts (ms).
-// PachinkoBoard draws its first frame synchronously in useEffect,
-// so 100ms is more than enough for it to cover MapPreview before we remove it.
 const MAP_LINGER_MS = 150;
 
 export default function Page() {
@@ -26,11 +23,13 @@ export default function Page() {
   const [namesInput, setNamesInput] = useState('');
   const [map, setMap] = useState('windmill');
 
+  // ── Shuffle order (maps display position → name index) ───────────────────
+  const [shuffledOrder, setShuffledOrder] = useState<number[]>([]);
+
   // ── Phase ────────────────────────────────────────────────────────────────
   const [phase, setPhase] = useState<'setup' | 'playing'>('setup');
 
   // ── MapPreview visibility ─────────────────────────────────────────────────
-  // Stays true until PachinkoBoard has had time to draw its first frame.
   const [showMapPreview, setShowMapPreview] = useState(true);
   const lingerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -40,47 +39,70 @@ export default function Page() {
   }
   useEffect(() => () => { if (lingerTimer.current) clearTimeout(lingerTimer.current); }, []);
 
-  // ── Form visibility (only the form fades, not the canvas) ────────────────
+  // ── Form visibility ────────────────────────────────────────────────────────
   const [formVisible, setFormVisible] = useState(true);
 
   // ── Game state ───────────────────────────────────────────────────────────
   const [players, setPlayers] = useState<Player[]>([]);
-  const [activeMap, setActiveMap] = useState('default');
+  const [activeMap, setActiveMap] = useState('windmill');
   const [scores, setScores] = useState<number[]>([]);
   const [winnerIndex, setWinnerIndex] = useState<number | null>(null);
   const [gameKey, setGameKey] = useState(0);
 
-  // Preload PachinkoBoard chunk before user clicks
+  // Preload PachinkoBoard chunk
   useEffect(() => { import('@/components/game/PachinkoBoard'); }, []);
 
-  // ── Setup form derived values ────────────────────────────────────────────
+  // ── Derived values ───────────────────────────────────────────────────────
   const names = namesInput.split(',').map((n) => n.trim()).filter(Boolean);
   const isValid = names.length >= 2 && names.length <= 30;
-
   const ballCounts = names.length >= 2 ? distributeBalls(names.length) : [];
-  const previewPlayers = names.map((name, i) => ({
-    name,
-    color: PLAYER_COLORS[i % PLAYER_COLORS.length],
-    initialBalls: ballCounts[i] ?? 0,
+
+  // Use shuffled order if it matches current names length, else identity
+  const effectiveOrder =
+    shuffledOrder.length === names.length
+      ? shuffledOrder
+      : names.map((_, i) => i);
+
+  const previewPlayers = effectiveOrder.map((nameIdx, colorIdx) => ({
+    name: names[nameIdx],
+    color: PLAYER_COLORS[colorIdx % PLAYER_COLORS.length],
+    initialBalls: ballCounts[colorIdx] ?? 0,
   }));
 
   // ── Handlers ─────────────────────────────────────────────────────────────
+  function shuffle(currentNames: string[]): number[] {
+    const order = currentNames.map((_, i) => i);
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+    return order;
+  }
+
+  function handleShuffle() {
+    if (names.length < 2) return;
+    setShuffledOrder(shuffle(names));
+    // If called after game ends → reset to pre-game state
+    if (winnerIndex !== null) {
+      setPhase('setup');
+      setWinnerIndex(null);
+      setShowMapPreview(true);
+      setFormVisible(true);
+    }
+  }
+
   const handleStart = useCallback(() => {
     if (!isValid) return;
-    const counts = distributeBalls(names.length);
-    const newPlayers = names.map((name, i) => ({
-      name,
-      color: PLAYER_COLORS[i % PLAYER_COLORS.length],
-      initialBalls: counts[i],
-    }));
+    const counts = distributeBalls(previewPlayers.length);
+    const newPlayers = previewPlayers.map((p, i) => ({ ...p, initialBalls: counts[i] }));
     setPlayers(newPlayers);
     setActiveMap(map);
     setScores(Array(newPlayers.length).fill(0));
     setWinnerIndex(null);
-    setFormVisible(false);   // fade out form
-    setPhase('playing');     // mount PachinkoBoard on top of MapPreview
-    scheduleMapPreviewHide();// remove MapPreview after PachinkoBoard has drawn
-  }, [isValid, names, map]);
+    setFormVisible(false);
+    setPhase('playing');
+    scheduleMapPreviewHide();
+  }, [isValid, previewPlayers, map]);
 
   const onScore = useCallback((playerId: number) => {
     setScores((prev) => {
@@ -97,24 +119,17 @@ export default function Page() {
 
   const handleNewGame = useCallback(() => {
     if (!isValid) return;
-    const counts = distributeBalls(names.length);
-    const newPlayers = names.map((name, i) => ({
-      name,
-      color: PLAYER_COLORS[i % PLAYER_COLORS.length],
-      initialBalls: counts[i],
-    }));
+    const counts = distributeBalls(previewPlayers.length);
+    const newPlayers = previewPlayers.map((p, i) => ({ ...p, initialBalls: counts[i] }));
     setPlayers(newPlayers);
     setActiveMap(map);
     setScores(Array(newPlayers.length).fill(0));
     setWinnerIndex(null);
     setFormVisible(false);
-    setNamesInput('');
-    // Briefly bring back MapPreview so it shows while old PachinkoBoard
-    // unmounts and new one draws its first frame.
     setShowMapPreview(true);
     setGameKey((k) => k + 1);
     scheduleMapPreviewHide();
-  }, [isValid, names, map]);
+  }, [isValid, previewPlayers, map]);
 
   // ── Shared form UI ────────────────────────────────────────────────────────
   const isPlaying = phase === 'playing';
@@ -158,10 +173,25 @@ export default function Page() {
               border: 'none', borderRadius: 6,
               padding: '10px 24px', fontFamily: 'monospace',
               fontSize: 16, fontWeight: 'bold',
-              cursor: isValid ? 'pointer' : 'not-allowed', flex: 1,
+              cursor: isValid ? 'pointer' : 'not-allowed',
             }}
           >
             시작
+          </button>
+          <button
+            onClick={handleShuffle}
+            disabled={!isValid}
+            style={{
+              background: isValid ? '#222' : '#1a1a1a',
+              color: isValid ? '#FFA502' : '#444',
+              border: `1px solid ${isValid ? '#FFA502' : '#333'}`,
+              borderRadius: 6,
+              padding: '8px 24px', fontFamily: 'monospace',
+              fontSize: 14, fontWeight: 'bold',
+              cursor: isValid ? 'pointer' : 'not-allowed',
+            }}
+          >
+            섞기
           </button>
         </div>
       </div>
@@ -177,15 +207,8 @@ export default function Page() {
   return (
     <div style={{ width: '100vw', height: '100vh', background: '#000', overflow: 'hidden', position: 'relative' }}>
 
-      {/*
-        MapPreview: stays in DOM briefly after PachinkoBoard mounts.
-        PachinkoBoard canvas is transparent until its useEffect draws —
-        MapPreview shows through. Then PachinkoBoard fills with black and
-        MapPreview is safely removed 150ms later with no visible gap.
-      */}
       {showMapPreview && <MapPreview map={phase === 'playing' ? activeMap : map} />}
 
-      {/* PachinkoBoard: renders after MapPreview in DOM so its canvas is on top */}
       {phase === 'playing' && (
         <PachinkoBoard
           key={gameKey}
@@ -212,7 +235,7 @@ export default function Page() {
         </>
       )}
 
-      {/* Form: fades out on start, fades in after winner */}
+      {/* Form */}
       {(phase === 'setup' || winnerIndex !== null) && (
         <div
           style={{

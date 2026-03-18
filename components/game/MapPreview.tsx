@@ -30,17 +30,36 @@ function buildPins(map: string): PinDef[] {
         ]
       : [];
 
+  const HOLE_EXCLUDE = 145; // HOLE_R_MAX(80) + 65 clearance
+
+  function addPin(x: number, y: number) {
+    const skipWm = wmCenters.some((wm) => Math.hypot(x - wm.x, y - wm.y) < 150);
+    const skipHole = Math.hypot(x - HOLE_X, y - HOLE_Y) < HOLE_EXCLUDE;
+    if (!skipWm && !skipHole) pins.push({ x, y });
+  }
+
   for (let r = 0; r < rowCount; r++) {
     const y = yStart + r * rowSpacing;
     const isShortRow = r % 2 === 0;
     const count = isShortRow ? 4 : 5;
     const spacing = isShortRow ? W / 5 : W / 6;
     for (let c = 0; c < count; c++) {
-      const x = spacing * (c + 1);
-      const skip = wmCenters.some((wm) => Math.hypot(x - wm.x, y - wm.y) < 150);
-      if (!skip) pins.push({ x, y });
+      addPin(spacing * (c + 1), y);
     }
   }
+
+  // Extra rows flanking the blackhole
+  const extraRows = [
+    { y: 1628, count: 4, spacing: W / 5 },
+    { y: 1672, count: 5, spacing: W / 6 },
+    { y: 1716, count: 4, spacing: W / 5 },
+  ];
+  for (const row of extraRows) {
+    for (let c = 0; c < row.count; c++) {
+      addPin(row.spacing * (c + 1), row.y);
+    }
+  }
+
   return pins;
 }
 

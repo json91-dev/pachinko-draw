@@ -56,7 +56,7 @@ export default function PlayerList({ players, scores, gameStarted }: PlayerListP
             lineHeight: 1.4,
           }}
         >
-          {entry.value}개 {entry.name} #{rank + 1}
+          {gameStarted ? entry.value : 0}개 {entry.name} #{rank + 1}
         </div>
       ))}
     </div>
