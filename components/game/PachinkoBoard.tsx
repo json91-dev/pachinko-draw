@@ -82,7 +82,7 @@ function buildPins(map: string): PinDef[] {
     const spacing = isShortRow ? W / 5 : W / 6;
 
     for (let c = 0; c < count; c++) {
-      const x = spacing * (c + 0.5);
+      const x = spacing * (c + 1);
       // Skip pins that would overlap windmill blades
       const skip = wmCenters.some((wm) => Math.hypot(x - wm.x, y - wm.y) < 150);
       if (!skip) pins.push({ x, y });
@@ -466,6 +466,16 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
       // Background
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, W, H);
+
+      // Walls (left & right)
+      ctx.save();
+      const WALL_W = 6;
+      ctx.shadowBlur = 16;
+      ctx.shadowColor = '#22FFFF';
+      ctx.fillStyle = '#22FFFF';
+      ctx.fillRect(0, 0, WALL_W, H);
+      ctx.fillRect(W - WALL_W, 0, WALL_W, H);
+      ctx.restore();
 
       // Hole
       ctx.save();
