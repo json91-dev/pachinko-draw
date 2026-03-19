@@ -398,19 +398,44 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
           const d = Math.max(dist, 20);
           const intensityT = Math.min(1, (BLACKHOLE_THRESHOLD - unfired()) / BLACKHOLE_THRESHOLD);
           const vel = ball.velocity;
-          const speed = Math.hypot(vel.x, vel.y);
+          let speed = Math.hypot(vel.x, vel.y);
+          const toHoleX = dx / d;
+          const toHoleY = dy / d;
+
+          // Minimum speed guarantee near hole
+          if (speed < 2 && d < 200) {
+            speed = 2;
+          }
+
           if (speed > 0.5) {
             const belowBoost = pos.y > HOLE_Y ? 1.8 : 1.0;
             const steer = (0.08 + intensityT * 0.25) * Math.min(3, 200 / d) * belowBoost;
-            const toHoleX = dx / d;
-            const toHoleY = dy / d;
             const newVx = vel.x + toHoleX * steer;
             const newVy = vel.y + toHoleY * steer;
-            const newSpeed = Math.hypot(newVx, newVy);
+
+            // Lerp velocity toward hole direction — closer = stronger
+            // Balls below the hole get much stronger lerp to overcome gravity
+            const isBelow = pos.y > HOLE_Y;
+            const baseLerp = d < 200 ? (1 - d / 200) : 0;
+            const lerpT = isBelow ? baseLerp * 0.85 : baseLerp * 0.4;
+            const finalVx = newVx * (1 - lerpT) + toHoleX * speed * lerpT;
+            const finalVy = newVy * (1 - lerpT) + toHoleY * speed * lerpT;
+            const finalSpeed = Math.hypot(finalVx, finalVy);
             Matter.Body.setVelocity(ball, {
-              x: (newVx / newSpeed) * speed,
-              y: (newVy / newSpeed) * speed,
+              x: (finalVx / finalSpeed) * speed,
+              y: (finalVy / finalSpeed) * speed,
             });
+          }
+
+          // Disable ball-ball collisions near blackhole to prevent clumping
+          if (d < 200) {
+            if (ball.collisionFilter.group !== -1) {
+              ball.collisionFilter.group = -1;
+            }
+          } else {
+            if (ball.collisionFilter.group !== 0) {
+              ball.collisionFilter.group = 0;
+            }
           }
         }
       }
