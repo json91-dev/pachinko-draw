@@ -9,7 +9,6 @@ import {
   clearTintCache,
 } from '@/lib/ballTint';
 import { checkWinner } from '@/lib/winnerCheck';
-import { BlackholeShader } from '@/lib/blackholeShader';
 
 // Virtual resolution — portrait 9:16, CSS-scaled uniformly to fit viewport
 const W = 1080;
@@ -214,6 +213,7 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
 
     let blackholeModeActive = false;
     let finaleActive = false;
+    let finaleStartTime: number | null = null;
     let gameOver = false;
     let winnerDeclared = false;
     let pendingWinner: number | null = null;
@@ -254,14 +254,6 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
     pi.src = '/images/pin_128.png';
 
     tintedBalls = preloadTintedBalls(players.map((p) => p.color), BALL_R * 2);
-
-    // ── WebGL shader ─────────────────────────────────────────────────────────
-    let shader: BlackholeShader | null = null;
-    try {
-      shader = new BlackholeShader();
-    } catch {
-      // WebGL not supported — graceful degradation
-    }
 
     // ── Hole sensor resize helper ────────────────────────────────────────────
     function updateHoleSensor(newRadius: number) {
@@ -494,11 +486,11 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
         bhBlinkTimer = now;
         bhTextVisible = true;
         bhTextSolid = false;
-        if (shader) shader.active = true;
       }
 
       if (!finaleActive && unfired() === 0) {
         finaleActive = true;
+        finaleStartTime = now;
         engine.timing.timeScale = 0.25;
         zoomTarget = 1.8; // show entire blackhole + suction field
       }
@@ -537,6 +529,12 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
 
       // All balls gone with no winner yet
       if (!winnerDeclared && !gameOver && unfired() === 0 && activeBalls.size === 0) {
+        const w = checkWinner(scores, 0);
+        if (w !== null) triggerWinner(w);
+      }
+
+      // Finale timeout — force end after 15 seconds
+      if (finaleActive && !winnerDeclared && finaleStartTime !== null && now - finaleStartTime > 15000) {
         const w = checkWinner(scores, 0);
         if (w !== null) triggerWinner(w);
       }
@@ -885,24 +883,6 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
         ctx.restore();
       }
 
-      // WebGL shader overlay
-      if (blackholeModeActive && shader) {
-        const intensityT = Math.min(
-          1,
-          Math.max(0, (BLACKHOLE_THRESHOLD - unfired()) / BLACKHOLE_THRESHOLD)
-        );
-        // Hole screen position = virtual pos * canvasScale + offset
-        const holeScreenX = HOLE_X * canvasScale + canvasOffsetX;
-        const holeScreenY = HOLE_Y * canvasScale + canvasOffsetY;
-        shader.render(
-          now / 1000,
-          holeScreenX,
-          holeScreenY,
-          window.innerWidth,
-          window.innerHeight,
-          intensityT
-        );
-      }
     }
 
     // Draw first frame synchronously so canvas is never blank when it appears
@@ -912,7 +892,6 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
     // Resize
     function onResize() {
       applyCanvasScale();
-      if (shader) shader.resize(window.innerWidth, window.innerHeight);
     }
     window.addEventListener('resize', onResize);
 
@@ -920,7 +899,7 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
       cancelAnimationFrame(rafId);
       Matter.World.clear(world, false);
       Matter.Engine.clear(engine);
-      if (shader) shader.destroy();
+
       clearTintCache();
       window.removeEventListener('resize', onResize);
     };
