@@ -28,6 +28,16 @@ const FUNNEL_BUMPERS: BumperDef[] = [
   { x: 810, y: 700, r: 45 },
 ];
 
+const BUMPER_CYCLE = 4000;
+const BUMPER_GLOW_DURATION = 1000;
+const BUMPER_PHASE_OFFSETS = [0, 1400, 2600];
+
+function getBumperGlowT(now: number, idx: number): number {
+  const t = (now + BUMPER_PHASE_OFFSETS[idx]) % BUMPER_CYCLE;
+  if (t < BUMPER_GLOW_DURATION) return t / BUMPER_GLOW_DURATION;
+  return -1;
+}
+
 const FUNNEL_FLIPPERS = [
   { cx: 330, cy: 1050, width: 200, height: 16, rangeX: 140, period: 2800, phase: 0 },
   { cx: 750, cy: 1050, width: 200, height: 16, rangeX: 140, period: 2800, phase: Math.PI },
@@ -255,27 +265,82 @@ export default function MapPreview({ map }: Props) {
       // Bumpers (funnel map)
       if (map === 'funnel') {
         ctx.save();
-        for (const b of FUNNEL_BUMPERS) {
-          ctx.shadowBlur = 30;
-          ctx.shadowColor = '#FF1493';
-          ctx.strokeStyle = '#FF1493';
-          ctx.lineWidth = 3;
+        for (let i = 0; i < FUNNEL_BUMPERS.length; i++) {
+          const b = FUNNEL_BUMPERS[i];
+          const glowT = getBumperGlowT(now, i);
+          const isGlowing = glowT >= 0;
+          const pulse = isGlowing ? Math.sin(glowT * Math.PI) : 0;
+
+          // Expanding rings during glow
+          if (isGlowing) {
+            for (let ri = 0; ri < 3; ri++) {
+              const ringPhase = (glowT + ri / 3) % 1;
+              const ringR = b.r + ringPhase * b.r * 2.2;
+              ctx.globalAlpha = (1 - ringPhase) * 0.7 * pulse;
+              ctx.strokeStyle = `hsl(${50 + ri * 20},100%,75%)`;
+              ctx.lineWidth = 3 - ri * 0.7;
+              ctx.shadowBlur = 20;
+              ctx.shadowColor = '#FFE000';
+              ctx.beginPath();
+              ctx.arc(b.x, b.y, ringR, 0, Math.PI * 2);
+              ctx.stroke();
+            }
+            ctx.globalAlpha = 1;
+          }
+
+          ctx.shadowBlur = isGlowing ? 60 + pulse * 40 : 30;
+          ctx.shadowColor = isGlowing ? '#FFE000' : '#FF1493';
+          ctx.strokeStyle = isGlowing ? `hsl(${45 + pulse * 20},100%,${65 + pulse * 30}%)` : '#FF1493';
+          ctx.lineWidth = isGlowing ? 4 + pulse * 3 : 3;
           ctx.beginPath();
-          ctx.arc(b.x, b.y, b.r + 4, 0, Math.PI * 2);
+          ctx.arc(b.x, b.y, b.r + 4 + pulse * 6, 0, Math.PI * 2);
           ctx.stroke();
-          const bGrad = ctx.createRadialGradient(b.x - b.r * 0.2, b.y - b.r * 0.2, 0, b.x, b.y, b.r);
-          bGrad.addColorStop(0, '#FF69B4');
-          bGrad.addColorStop(0.6, '#FF1493');
-          bGrad.addColorStop(1, '#C71585');
-          ctx.shadowBlur = 20;
+
+          const innerR = b.r + pulse * 5;
+          const bGrad = ctx.createRadialGradient(b.x - innerR * 0.2, b.y - innerR * 0.2, 0, b.x, b.y, innerR);
+          if (isGlowing) {
+            bGrad.addColorStop(0, `rgba(255,255,${Math.floor(100 + pulse * 155)},1)`);
+            bGrad.addColorStop(0.4, `rgba(255,${Math.floor(180 + pulse * 75)},0,1)`);
+            bGrad.addColorStop(1, '#C71585');
+          } else {
+            bGrad.addColorStop(0, '#FF69B4');
+            bGrad.addColorStop(0.6, '#FF1493');
+            bGrad.addColorStop(1, '#C71585');
+          }
+          ctx.shadowBlur = isGlowing ? 40 + pulse * 30 : 20;
           ctx.fillStyle = bGrad;
           ctx.beginPath();
-          ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+          ctx.arc(b.x, b.y, innerR, 0, Math.PI * 2);
           ctx.fill();
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+
+          ctx.fillStyle = `rgba(255,255,255,${isGlowing ? 0.55 + pulse * 0.3 : 0.25})`;
+          ctx.shadowBlur = 0;
           ctx.beginPath();
-          ctx.arc(b.x - b.r * 0.25, b.y - b.r * 0.25, b.r * 0.35, 0, Math.PI * 2);
+          ctx.arc(b.x - innerR * 0.25, b.y - innerR * 0.25, innerR * 0.35, 0, Math.PI * 2);
           ctx.fill();
+
+          // Spark lines
+          if (isGlowing && pulse > 0.2) {
+            ctx.save();
+            for (let si = 0; si < 6; si++) {
+              const sparkAngle = (si / 6) * Math.PI * 2 + glowT * Math.PI * 4;
+              const sparkLen = (8 + Math.sin(glowT * 20 + si * 1.7) * 6) * pulse;
+              const sx1 = b.x + Math.cos(sparkAngle) * (b.r + 4);
+              const sy1 = b.y + Math.sin(sparkAngle) * (b.r + 4);
+              const sx2 = b.x + Math.cos(sparkAngle) * (b.r + 4 + sparkLen);
+              const sy2 = b.y + Math.sin(sparkAngle) * (b.r + 4 + sparkLen);
+              ctx.globalAlpha = pulse * 0.9;
+              ctx.strokeStyle = '#FFFFFF';
+              ctx.lineWidth = 2;
+              ctx.shadowBlur = 15;
+              ctx.shadowColor = '#FFE000';
+              ctx.beginPath();
+              ctx.moveTo(sx1, sy1);
+              ctx.lineTo(sx2, sy2);
+              ctx.stroke();
+            }
+            ctx.restore();
+          }
         }
         ctx.restore();
 

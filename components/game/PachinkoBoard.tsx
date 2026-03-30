@@ -82,6 +82,17 @@ const FUNNEL_BUMPERS: BumperDef[] = [
   { x: 810, y: 700, r: 45 },
 ];
 
+// Bumper glow: 4-second cycle (3s off, 1s glow), each bumper has a staggered phase
+const BUMPER_CYCLE = 4000;
+const BUMPER_GLOW_DURATION = 1000;
+const BUMPER_PHASE_OFFSETS = [0, 1400, 2600]; // stagger per bumper (ms)
+
+function getBumperGlowT(now: number, idx: number): number {
+  const t = (now + BUMPER_PHASE_OFFSETS[idx]) % BUMPER_CYCLE;
+  if (t < BUMPER_GLOW_DURATION) return t / BUMPER_GLOW_DURATION; // 0→1 during glow
+  return -1; // not glowing
+}
+
 const FUNNEL_FLIPPERS: Omit<FlipperDef, 'body'>[] = [
   { cx: 330, cy: 1050, width: 200, height: 16, rangeX: 140, period: 2800, phase: 0 },
   { cx: 750, cy: 1050, width: 200, height: 16, rangeX: 140, period: 2800, phase: Math.PI },
@@ -225,6 +236,8 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
 
     // Bumpers (funnel map)
     const bumperBodies: Matter.Body[] = [];
+    // Shared mutable "now" for collision handler closure
+    let currentNow = 0;
     if (map === 'funnel') {
       for (const b of FUNNEL_BUMPERS) {
         const body = Matter.Bodies.circle(b.x, b.y, b.r, {
@@ -236,6 +249,38 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
         bumperBodies.push(body);
         Matter.World.add(world, body);
       }
+
+      // Collision boost for glowing bumpers
+      Matter.Events.on(engine, 'collisionStart', (event) => {
+        for (const pair of event.pairs) {
+          let ballBody: Matter.Body | null = null;
+          let bumperBody: Matter.Body | null = null;
+
+          if (pair.bodyA.label === 'bumper' && pair.bodyB.label === 'ball') {
+            bumperBody = pair.bodyA; ballBody = pair.bodyB;
+          } else if (pair.bodyB.label === 'bumper' && pair.bodyA.label === 'ball') {
+            bumperBody = pair.bodyB; ballBody = pair.bodyA;
+          }
+
+          if (!ballBody || !bumperBody) continue;
+          const bumperIdx = bumperBodies.indexOf(bumperBody);
+          if (bumperIdx < 0) continue;
+
+          const glowT = getBumperGlowT(currentNow, bumperIdx);
+          if (glowT < 0) continue; // not glowing
+
+          // Apply super-bounce: shoot ball away from bumper center at high speed
+          const bumperDef = FUNNEL_BUMPERS[bumperIdx];
+          const dx = ballBody.position.x - bumperDef.x;
+          const dy = ballBody.position.y - bumperDef.y;
+          const d = Math.hypot(dx, dy) || 1;
+          const superSpeed = 28 + Math.random() * 8;
+          Matter.Body.setVelocity(ballBody, {
+            x: (dx / d) * superSpeed,
+            y: (dy / d) * superSpeed,
+          });
+        }
+      });
     }
 
     // Flippers (funnel map)
@@ -398,6 +443,7 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
       if (lastTime === null) lastTime = now;
       const delta = Math.min(now - lastTime, 50);
       lastTime = now;
+      currentNow = now;
 
       // Update physics
       Matter.Engine.update(engine, delta);
@@ -791,29 +837,93 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
         ctx.save();
         for (let i = 0; i < FUNNEL_BUMPERS.length; i++) {
           const b = FUNNEL_BUMPERS[i];
+          const glowT = getBumperGlowT(now, i);
+          const isGlowing = glowT >= 0;
+
+          // Glow pulse: ease in-out
+          const pulse = isGlowing ? Math.sin(glowT * Math.PI) : 0;
+
+          // Expanding electric rings during glow
+          if (isGlowing) {
+            const ringCount = 3;
+            for (let ri = 0; ri < ringCount; ri++) {
+              const ringPhase = (glowT + ri / ringCount) % 1;
+              const ringR = b.r + ringPhase * b.r * 2.2;
+              const ringAlpha = (1 - ringPhase) * 0.7 * pulse;
+              ctx.globalAlpha = ringAlpha;
+              ctx.strokeStyle = `hsl(${50 + ri * 20}, 100%, 75%)`;
+              ctx.lineWidth = 3 - ri * 0.7;
+              ctx.shadowBlur = 20;
+              ctx.shadowColor = '#FFE000';
+              ctx.beginPath();
+              ctx.arc(b.x, b.y, ringR, 0, Math.PI * 2);
+              ctx.stroke();
+            }
+            ctx.globalAlpha = 1;
+          }
+
           // Outer glow ring
-          ctx.shadowBlur = 30;
-          ctx.shadowColor = '#FF1493';
-          ctx.strokeStyle = '#FF1493';
-          ctx.lineWidth = 3;
+          const glowColor = isGlowing
+            ? `hsl(${45 + pulse * 20}, 100%, ${65 + pulse * 30}%)`
+            : '#FF1493';
+          ctx.shadowBlur = isGlowing ? 60 + pulse * 40 : 30;
+          ctx.shadowColor = isGlowing ? '#FFE000' : '#FF1493';
+          ctx.strokeStyle = glowColor;
+          ctx.lineWidth = isGlowing ? 4 + pulse * 3 : 3;
           ctx.beginPath();
-          ctx.arc(b.x, b.y, b.r + 4, 0, Math.PI * 2);
+          ctx.arc(b.x, b.y, b.r + 4 + pulse * 6, 0, Math.PI * 2);
           ctx.stroke();
+
           // Inner gradient fill
-          const bGrad = ctx.createRadialGradient(b.x - b.r * 0.2, b.y - b.r * 0.2, 0, b.x, b.y, b.r);
-          bGrad.addColorStop(0, '#FF69B4');
-          bGrad.addColorStop(0.6, '#FF1493');
-          bGrad.addColorStop(1, '#C71585');
-          ctx.shadowBlur = 20;
+          const innerR = b.r + pulse * 5;
+          const cx0 = b.x - innerR * 0.2;
+          const cy0 = b.y - innerR * 0.2;
+          const bGrad = ctx.createRadialGradient(cx0, cy0, 0, b.x, b.y, innerR);
+          if (isGlowing) {
+            bGrad.addColorStop(0, `rgba(255,255,${Math.floor(100 + pulse * 155)},1)`);
+            bGrad.addColorStop(0.4, `rgba(255,${Math.floor(180 + pulse * 75)},0,1)`);
+            bGrad.addColorStop(1, '#C71585');
+          } else {
+            bGrad.addColorStop(0, '#FF69B4');
+            bGrad.addColorStop(0.6, '#FF1493');
+            bGrad.addColorStop(1, '#C71585');
+          }
+          ctx.shadowBlur = isGlowing ? 40 + pulse * 30 : 20;
           ctx.fillStyle = bGrad;
           ctx.beginPath();
-          ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+          ctx.arc(b.x, b.y, innerR, 0, Math.PI * 2);
           ctx.fill();
+
           // Highlight
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+          ctx.fillStyle = `rgba(255,255,255,${isGlowing ? 0.55 + pulse * 0.3 : 0.25})`;
+          ctx.shadowBlur = 0;
           ctx.beginPath();
-          ctx.arc(b.x - b.r * 0.25, b.y - b.r * 0.25, b.r * 0.35, 0, Math.PI * 2);
+          ctx.arc(b.x - innerR * 0.25, b.y - innerR * 0.25, innerR * 0.35, 0, Math.PI * 2);
           ctx.fill();
+
+          // Electric spark lines during glow
+          if (isGlowing && pulse > 0.2) {
+            ctx.save();
+            const sparkCount = 6;
+            for (let si = 0; si < sparkCount; si++) {
+              const sparkAngle = (si / sparkCount) * Math.PI * 2 + glowT * Math.PI * 4;
+              const sparkLen = (8 + Math.sin(glowT * 20 + si * 1.7) * 6) * pulse;
+              const sx1 = b.x + Math.cos(sparkAngle) * (b.r + 4);
+              const sy1 = b.y + Math.sin(sparkAngle) * (b.r + 4);
+              const sx2 = b.x + Math.cos(sparkAngle) * (b.r + 4 + sparkLen);
+              const sy2 = b.y + Math.sin(sparkAngle) * (b.r + 4 + sparkLen);
+              ctx.globalAlpha = pulse * 0.9;
+              ctx.strokeStyle = '#FFFFFF';
+              ctx.lineWidth = 2;
+              ctx.shadowBlur = 15;
+              ctx.shadowColor = '#FFE000';
+              ctx.beginPath();
+              ctx.moveTo(sx1, sy1);
+              ctx.lineTo(sx2, sy2);
+              ctx.stroke();
+            }
+            ctx.restore();
+          }
         }
         ctx.restore();
 
