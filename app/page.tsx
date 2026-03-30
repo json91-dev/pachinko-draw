@@ -21,7 +21,7 @@ const MAP_LINGER_MS = 150;
 export default function Page() {
   // ── Setup form state ─────────────────────────────────────────────────────
   const [namesInput, setNamesInput] = useState('');
-  const [map, setMap] = useState('windmill');
+  const [map, setMap] = useState('funnel');
 
   // ── Shuffle order (maps display position → name index) ───────────────────
   const [shuffledOrder, setShuffledOrder] = useState<number[]>([]);

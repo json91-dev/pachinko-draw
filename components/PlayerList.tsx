@@ -15,7 +15,6 @@ interface PlayerListProps {
 export default function PlayerList({ players, scores, gameStarted }: PlayerListProps) {
   if (players.length === 0) return null;
 
-  // Build sorted list: by score descending (or by input order if not started)
   const entries = players.map((p, i) => ({
     name: p.name,
     color: p.color,
@@ -48,7 +47,7 @@ export default function PlayerList({ players, scores, gameStarted }: PlayerListP
           key={entry.originalIndex}
           style={{
             color: entry.color,
-            fontSize: 14,
+            fontSize: 18,
             fontWeight: 'bold',
             fontFamily: 'monospace',
             textShadow: `0 0 8px ${entry.color}`,

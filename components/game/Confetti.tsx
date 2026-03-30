@@ -26,10 +26,9 @@ export default function Confetti() {
     const ctx = canvas.getContext('2d')!;
 
     const particles: Particle[] = [];
-    for (let i = 0; i < 60; i++) {
-      const speed = 10 + Math.random() * 14;
-      // Direction: from bottom-right toward upper-left (angle 120°–180° from positive x-axis)
-      const angle = Math.PI * (0.65 + Math.random() * 0.35);
+    for (let i = 0; i < 66; i++) {
+      const speed = (800 + Math.random() * 600);  // px/s
+      const angle = Math.PI * (0.55 + Math.random() * 0.35);
       particles.push({
         x: window.innerWidth - 10 + Math.random() * 20,
         y: window.innerHeight - 10 + Math.random() * 20,
@@ -38,20 +37,26 @@ export default function Confetti() {
         size: 10.4 + Math.random() * 10.4,
         color: PLAYER_COLORS[Math.floor(Math.random() * PLAYER_COLORS.length)],
         rotation: Math.random() * Math.PI * 2,
-        rotSpeed: (Math.random() - 0.5) * 0.18,
+        rotSpeed: (Math.random() - 0.5) * 12,  // rad/s
       });
     }
 
     let rafId: number;
+    let lastTime: number | null = null;
 
-    function draw() {
+    const GRAVITY = 1800;  // px/s²
+
+    function draw(now: number) {
+      const dt = lastTime === null ? 0 : Math.min((now - lastTime) / 1000, 0.05);
+      lastTime = now;
+
       ctx.clearRect(0, 0, canvas!.width, canvas!.height);
       let alive = false;
       for (const p of particles) {
-        p.vy += 0.35;
-        p.x += p.vx;
-        p.y += p.vy;
-        p.rotation += p.rotSpeed;
+        p.vy += GRAVITY * dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.rotation += p.rotSpeed * dt;
         if (p.y < canvas!.height + 60) {
           alive = true;
           ctx.save();

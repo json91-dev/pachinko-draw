@@ -30,8 +30,8 @@ const CANNON_PERIOD = 4000; // ms
 
 const FIRE_MS = 40;
 
-const BLACKHOLE_THRESHOLD = 200;
-const FINALE_THRESHOLD = 150;
+const BLACKHOLE_THRESHOLD = 125;
+const FINALE_THRESHOLD = 75;
 
 interface Player {
   name: string;
@@ -325,19 +325,23 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
     let finaleActive = false;
     let finaleStartTime: number | null = null;
     let gameOver = false;
+    let simSpeed = 1.0; // simulation speed multiplier (applied to delta)
     let winnerDeclared = false;
-    let pendingWinner: number | null = null;
 
     // Zoom state
     let zoomScale = 1.0;
     let zoomTarget = 1.0;
-    let zoomingOut = false;
 
     // BLACK HOLE MODE blink state
     let bhBlinkPhase = 0; // counts half-cycles
     let bhBlinkTimer = 0;
     let bhTextVisible = false;
     let bhTextSolid = false;
+    let bhWarningStartTime: number | null = null;
+
+    // Rank change overlay state
+    let prevRank1Idx = 0;
+    let rankChangeOverlay: { playerIdx: number; startTime: number } | null = null;
 
     // Track consumed pins (absorbed by blackhole)
     const consumedPins = new Set<number>();
@@ -419,17 +423,11 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
     function triggerWinner(idx: number) {
       if (winnerDeclared) return;
       winnerDeclared = true;
-      pendingWinner = idx;
       gameOver = true;
-
-      if (finaleActive && Math.abs(zoomScale - 1.0) > 0.05) {
-        // Zoom out first, then call onWinner
-        zoomingOut = true;
-        zoomTarget = 1.0;
-      } else {
-        zoomScale = 1.0;
-        onWinnerRef.current(idx);
-      }
+      simSpeed = 1.0;
+      zoomScale = 1.0;
+      zoomTarget = 1.0;
+      onWinnerRef.current(idx);
     }
 
     // ── Game loop ─────────────────────────────────────────────────────────────
@@ -445,8 +443,11 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
       lastTime = now;
       currentNow = now;
 
-      // Update physics
-      Matter.Engine.update(engine, delta);
+      // Force normal speed once game is over
+      if (gameOver) simSpeed = 1.0;
+
+      // Update physics (simSpeed scales the timestep directly — no engine.timing.timeScale used)
+      Matter.Engine.update(engine, delta * simSpeed);
 
       // Cannon swing
       cannonAngle =
@@ -499,6 +500,17 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
           scores[playerId]++;
           onScoreRef.current(playerId);
           toRemove.push(ball);
+
+          // Detect rank-1 change
+          let newRank1 = 0;
+          for (let ri = 1; ri < scores.length; ri++) {
+            if (scores[ri] > scores[newRank1]) newRank1 = ri;
+          }
+          if (newRank1 !== prevRank1Idx && scores[newRank1] > 0) {
+            rankChangeOverlay = { playerIdx: newRank1, startTime: now };
+            prevRank1Idx = newRank1;
+          }
+
           continue;
         }
 
@@ -605,12 +617,13 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
         bhBlinkTimer = now;
         bhTextVisible = true;
         bhTextSolid = false;
+        bhWarningStartTime = now;
       }
 
       if (!finaleActive && unfired() === 0) {
         finaleActive = true;
         finaleStartTime = now;
-        engine.timing.timeScale = 0.25;
+        simSpeed = 0.4;
         zoomTarget = 1.8; // show entire blackhole + suction field
       }
 
@@ -634,7 +647,7 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
       }
 
       // Zoom in (finale)
-      if (finaleActive && !zoomingOut) {
+      if (finaleActive && !gameOver) {
         zoomScale += (zoomTarget - zoomScale) * 0.04;
       }
 
@@ -656,18 +669,6 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
       if (finaleActive && !winnerDeclared && finaleStartTime !== null && now - finaleStartTime > 15000) {
         const w = checkWinner(scores, 0);
         if (w !== null) triggerWinner(w);
-      }
-
-      // Zoom-out after winner
-      if (zoomingOut) {
-        zoomScale += (1.0 - zoomScale) * 0.08;
-        if (Math.abs(zoomScale - 1.0) < 0.02) {
-          zoomScale = 1.0;
-          zoomingOut = false;
-          if (pendingWinner !== null) {
-            onWinnerRef.current(pendingWinner);
-          }
-        }
       }
 
       // Render
@@ -1115,6 +1116,119 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
         ctx.shadowColor = '#FF0000';
         ctx.fillText('BLACK HOLE MODE', W - 16, 56);
         ctx.restore();
+      }
+
+      // ── Blackhole Warning Banner (centered, dramatic) ──────────────────────
+      if (bhWarningStartTime !== null) {
+        const elapsed = now - bhWarningStartTime;
+        const BH_WARN_DURATION = 3200;
+        if (elapsed < BH_WARN_DURATION) {
+          const t = elapsed / BH_WARN_DURATION;
+
+          // Fade envelope: quick in, hold, fade out
+          let fadeAlpha = 1;
+          if (t < 0.1) fadeAlpha = t / 0.1;
+          else if (t > 0.72) fadeAlpha = (1 - t) / 0.28;
+
+          // Fast blink (8 cycles ≈ 400ms per cycle)
+          const blinkCycle = 400;
+          const blinkPhase = (elapsed % blinkCycle) / blinkCycle;
+          const blinkBright = blinkPhase < 0.6;
+
+          ctx.save();
+
+          // Dark vignette overlay (always visible, no blink)
+          ctx.globalAlpha = fadeAlpha * 0.65;
+          ctx.fillStyle = '#000000';
+          ctx.fillRect(0, 0, W, H);
+
+          // Text alpha (blinks)
+          ctx.globalAlpha = fadeAlpha * (blinkBright ? 1.0 : 0.08);
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+
+          // Red border box
+          const boxW = 900;
+          const boxH = 190;
+          const bx = (W - boxW) / 2;
+          const by = H * 0.42 - boxH / 2;
+          ctx.strokeStyle = '#FF2200';
+          ctx.lineWidth = 5;
+          ctx.shadowBlur = 60;
+          ctx.shadowColor = '#FF0000';
+          ctx.fillStyle = 'rgba(30, 0, 0, 0.75)';
+          ctx.beginPath();
+          ctx.roundRect(bx, by, boxW, boxH, 14);
+          ctx.fill();
+          ctx.stroke();
+
+          // Main warning text
+          ctx.font = 'bold 82px monospace';
+          ctx.shadowBlur = 80;
+          ctx.shadowColor = '#FF0000';
+          ctx.fillStyle = '#FF2200';
+          ctx.fillText('⚠ BLACK HOLE MODE ⚠', W / 2, H * 0.42 - 22);
+
+          // Subtitle
+          ctx.font = 'bold 36px monospace';
+          ctx.shadowBlur = 40;
+          ctx.shadowColor = '#FF6600';
+          ctx.fillStyle = '#FFAA00';
+          ctx.fillText('공이 블랙홀로 빨려들어갑니다!', W / 2, H * 0.42 + 55);
+
+          ctx.restore();
+        }
+      }
+
+      // ── Rank-1 change overlay (H×0.62 — always below blackhole warning at H×0.42) ──
+      if (rankChangeOverlay !== null) {
+        const elapsed = now - rankChangeOverlay.startTime;
+        const RANK_DURATION = 2600;
+        if (elapsed < RANK_DURATION) {
+          const t = elapsed / RANK_DURATION;
+          let alpha = 1;
+          if (t < 0.12) alpha = t / 0.12;
+          else if (t > 0.72) alpha = (1 - t) / 0.28;
+
+          const pulse = 1 + 0.04 * Math.sin((elapsed / 260) * Math.PI);
+          const player = players[rankChangeOverlay.playerIdx];
+          const color = player?.color ?? '#FFD700';
+          const cy = H * 0.62;
+
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+
+          // Background box
+          const boxW = 740;
+          const boxH = 158;
+          ctx.fillStyle = 'rgba(0, 0, 15, 0.88)';
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 4;
+          ctx.shadowBlur = 50;
+          ctx.shadowColor = color;
+          ctx.beginPath();
+          ctx.roundRect((W - boxW) / 2, cy - boxH / 2, boxW, boxH, 14);
+          ctx.fill();
+          ctx.stroke();
+
+          // Player name
+          ctx.font = `bold ${Math.floor(70 * pulse)}px monospace`;
+          ctx.shadowBlur = 60;
+          ctx.shadowColor = color;
+          ctx.fillStyle = color;
+          ctx.fillText(player?.name ?? '', W / 2, cy - 20);
+
+          // Sub-label
+          ctx.font = 'bold 32px monospace';
+          ctx.shadowBlur = 22;
+          ctx.shadowColor = '#FFD700';
+          ctx.fillStyle = '#FFD700';
+          ctx.fillText('1위 등극!', W / 2, cy + 50);
+
+          ctx.restore();
+        }
       }
 
     }

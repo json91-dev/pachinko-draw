@@ -8,8 +8,8 @@ export const PLAYER_COLORS: string[] = [
 ];
 
 export function distributeBalls(playerCount: number): number[] {
-  const perPlayer = Math.floor(800 / playerCount);
-  const remainder = 800 % playerCount;
+  const perPlayer = Math.floor(500 / playerCount);
+  const remainder = 500 % playerCount;
   return Array.from({ length: playerCount }, (_, i) =>
     i === 0 ? perPlayer + remainder : perPlayer
   );
