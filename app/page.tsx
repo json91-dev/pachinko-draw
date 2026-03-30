@@ -163,6 +163,7 @@ export default function Page() {
             }}
           >
             <option value="windmill">빙글빙글 물레방아</option>
+            <option value="funnel">바운스 깔때기</option>
           </select>
           <button
             onClick={isPlaying ? handleNewGame : handleStart}

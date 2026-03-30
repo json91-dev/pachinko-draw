@@ -58,11 +58,40 @@ interface WindmillState {
   blades: Matter.Body[];
 }
 
+interface BumperDef {
+  x: number;
+  y: number;
+  r: number;
+}
+
+interface FlipperDef {
+  cx: number;
+  cy: number;
+  width: number;
+  height: number;
+  rangeX: number; // oscillation amplitude
+  period: number;
+  phase: number; // phase offset in radians
+  body: Matter.Body | null;
+}
+
+// Funnel map obstacle definitions (shared between buildPins and game logic)
+const FUNNEL_BUMPERS: BumperDef[] = [
+  { x: 540, y: 450, r: 50 },
+  { x: 270, y: 700, r: 45 },
+  { x: 810, y: 700, r: 45 },
+];
+
+const FUNNEL_FLIPPERS: Omit<FlipperDef, 'body'>[] = [
+  { cx: 330, cy: 1050, width: 200, height: 16, rangeX: 140, period: 2800, phase: 0 },
+  { cx: 750, cy: 1050, width: 200, height: 16, rangeX: 140, period: 2800, phase: Math.PI },
+];
+
 function buildPins(map: string): PinDef[] {
   const pins: PinDef[] = [];
   const yStart = 150;
-  const yEnd = H - 120; // extend to near bottom of map
-  const rowCount = 14; // fewer rows for wider vertical spacing
+  const yEnd = H - 120;
+  const rowCount = 14;
   const rowSpacing = (yEnd - yStart) / (rowCount - 1);
 
   const wmCenters =
@@ -79,7 +108,13 @@ function buildPins(map: string): PinDef[] {
   function addPin(x: number, y: number) {
     const skipWm = wmCenters.some((wm) => Math.hypot(x - wm.x, y - wm.y) < 150);
     const skipHole = Math.hypot(x - HOLE_X, y - HOLE_Y) < HOLE_EXCLUDE;
-    if (!skipWm && !skipHole) pins.push({ x, y });
+    // Skip pins near funnel bumpers
+    const skipBumper = map === 'funnel' && FUNNEL_BUMPERS.some((b) => Math.hypot(x - b.x, y - b.y) < b.r + 60);
+    // Skip pins near funnel flipper paths
+    const skipFlipper = map === 'funnel' && FUNNEL_FLIPPERS.some((f) =>
+      Math.abs(y - f.cy) < 40 && Math.abs(x - f.cx) < f.width / 2 + f.rangeX + 30
+    );
+    if (!skipWm && !skipHole && !skipBumper && !skipFlipper) pins.push({ x, y });
   }
 
   for (let r = 0; r < rowCount; r++) {
@@ -185,6 +220,36 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
           Matter.World.add(world, blade);
         }
         windmills.push({ cx: wm.x, cy: wm.y, angle: 0, blades });
+      }
+    }
+
+    // Bumpers (funnel map)
+    const bumperBodies: Matter.Body[] = [];
+    if (map === 'funnel') {
+      for (const b of FUNNEL_BUMPERS) {
+        const body = Matter.Bodies.circle(b.x, b.y, b.r, {
+          isStatic: true,
+          friction: 0,
+          restitution: 1.3,
+          label: 'bumper',
+        });
+        bumperBodies.push(body);
+        Matter.World.add(world, body);
+      }
+    }
+
+    // Flippers (funnel map)
+    const flippers: FlipperDef[] = [];
+    if (map === 'funnel') {
+      for (const f of FUNNEL_FLIPPERS) {
+        const body = Matter.Bodies.rectangle(f.cx, f.cy, f.width, f.height, {
+          isStatic: true,
+          friction: 0,
+          restitution: 0.5,
+          label: 'flipper',
+        });
+        Matter.World.add(world, body);
+        flippers.push({ ...f, body });
       }
     }
 
@@ -360,6 +425,14 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
           });
           Matter.Body.setAngle(wm.blades[i], a);
         }
+      }
+
+      // Oscillate flippers
+      for (const f of flippers) {
+        if (!f.body) continue;
+        const t = (now / f.period) * Math.PI * 2 + f.phase;
+        const newX = f.cx + Math.sin(t) * f.rangeX;
+        Matter.Body.setPosition(f.body, { x: newX, y: f.cy });
       }
 
       // Process active balls
@@ -709,6 +782,57 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
             ctx.fillRect(-70, -8, 140, 16);
             ctx.restore();
           }
+        }
+        ctx.restore();
+      }
+
+      // Bumpers (funnel map)
+      if (map === 'funnel') {
+        ctx.save();
+        for (let i = 0; i < FUNNEL_BUMPERS.length; i++) {
+          const b = FUNNEL_BUMPERS[i];
+          // Outer glow ring
+          ctx.shadowBlur = 30;
+          ctx.shadowColor = '#FF1493';
+          ctx.strokeStyle = '#FF1493';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, b.r + 4, 0, Math.PI * 2);
+          ctx.stroke();
+          // Inner gradient fill
+          const bGrad = ctx.createRadialGradient(b.x - b.r * 0.2, b.y - b.r * 0.2, 0, b.x, b.y, b.r);
+          bGrad.addColorStop(0, '#FF69B4');
+          bGrad.addColorStop(0.6, '#FF1493');
+          bGrad.addColorStop(1, '#C71585');
+          ctx.shadowBlur = 20;
+          ctx.fillStyle = bGrad;
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+          ctx.fill();
+          // Highlight
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+          ctx.beginPath();
+          ctx.arc(b.x - b.r * 0.25, b.y - b.r * 0.25, b.r * 0.35, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+
+        // Flippers
+        ctx.save();
+        ctx.shadowBlur = 18;
+        ctx.shadowColor = '#FF8C00';
+        for (const f of flippers) {
+          if (!f.body) continue;
+          const pos = f.body.position;
+          ctx.fillStyle = '#FFA500';
+          ctx.beginPath();
+          ctx.roundRect(pos.x - f.width / 2, pos.y - f.height / 2, f.width, f.height, 8);
+          ctx.fill();
+          // Highlight stripe
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+          ctx.beginPath();
+          ctx.roundRect(pos.x - f.width / 2 + 4, pos.y - f.height / 2 + 2, f.width - 8, f.height / 3, 4);
+          ctx.fill();
         }
         ctx.restore();
       }

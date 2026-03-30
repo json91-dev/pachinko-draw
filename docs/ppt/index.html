@@ -60,36 +60,6 @@
   li { margin-bottom: 4px; }
   li strong { color: #222; }
 
-  /* ── Tags ─────────────────────────────────────────────────────── */
-  .tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 8px;
-    margin-bottom: 24px;
-  }
-
-  .tag {
-    display: inline-block;
-    padding: 4px 14px;
-    border-radius: 4px;
-    font-size: 13px;
-    font-weight: 700;
-    color: #fff;
-  }
-
-  .tag.green   { background: #3a7d44; }
-  .tag.blue    { background: #2563eb; }
-  .tag.red     { background: #c0392b; }
-  .tag.orange  { background: #d97706; }
-  .tag.purple  { background: #7c3aed; }
-  .tag.gray    { background: #555; }
-  .tag.outline {
-    background: transparent;
-    border: 1.5px solid #999;
-    color: #555;
-  }
-
   /* ── Table style ─────────────────────────────────────────────── */
   .arch-table {
     border-collapse: collapse;
@@ -168,37 +138,6 @@
     padding: 0 8px;
   }
 
-  /* ── Screenshot card ─────────────────────────────────────────── */
-  .screenshot-row {
-    display: flex;
-    gap: 32px;
-    align-items: flex-start;
-    flex-wrap: wrap;
-  }
-
-  .screenshot-card {
-    background: #fff;
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-    width: 220px;
-  }
-
-  .screenshot-card img {
-    width: 100%;
-    height: 180px;
-    object-fit: contain;
-    background: #1a1a1a;
-    padding: 12px;
-  }
-
-  .screenshot-card .caption {
-    padding: 12px 16px;
-    font-size: 13px;
-    font-weight: 700;
-    color: #333;
-  }
-
   /* ── Link button ─────────────────────────────────────────────── */
   .link-bar {
     position: absolute;
@@ -240,33 +179,40 @@
     z-index: 100;
   }
 
-  /* ── Matter.js feature cards ─────────────────────────────────── */
-  .feature-cards {
+  /* ── Matter.js principle cards ───────────────────────────────── */
+  .principle-cards {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 16px;
     margin-top: 16px;
   }
 
-  .feature-card {
+  .principle-card {
     background: #fff;
     border: 1px solid #e5e5e5;
     border-radius: 10px;
     padding: 20px;
   }
 
-  .feature-card .fc-title {
+  .principle-card .pc-title {
     font-weight: 900;
-    font-size: 15px;
+    font-size: 16px;
     margin-bottom: 6px;
-    font-family: 'Courier New', monospace;
     color: #222;
   }
 
-  .feature-card .fc-desc {
-    font-size: 13px;
+  .principle-card .pc-desc {
+    font-size: 14px;
     color: #666;
     line-height: 1.6;
+  }
+
+  .principle-card code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+    color: #c0392b;
   }
 
   /* ── Slide 1 hero ────────────────────────────────────────────── */
@@ -296,18 +242,6 @@
     font-weight: 700;
   }
 
-  .hero-images {
-    display: flex;
-    gap: 24px;
-    align-items: center;
-    margin-top: 20px;
-  }
-
-  .hero-images img {
-    height: 80px;
-    object-fit: contain;
-  }
-
   /* ── Highlight box ───────────────────────────────────────────── */
   .highlight-box {
     background: #fef3cd;
@@ -317,6 +251,42 @@
     color: #856404;
     margin-top: 20px;
     line-height: 1.6;
+  }
+
+  /* ── Screenshot slide ────────────────────────────────────────── */
+  .screenshot-main {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 40px;
+  }
+
+  .screenshot-main img {
+    max-height: 70vh;
+    border-radius: 12px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+    object-fit: contain;
+  }
+
+  .screenshot-side {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-width: 280px;
+  }
+
+  .screenshot-side img {
+    width: 100%;
+    border-radius: 8px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  }
+
+  .screenshot-caption {
+    font-size: 13px;
+    color: #888;
+    text-align: center;
+    margin-top: 4px;
   }
 </style>
 </head>
@@ -335,61 +305,17 @@
         <span class="hero-badge" style="background:#fce4ec; color:#c62828;">Matter.js</span>
         <span class="hero-badge" style="background:#f3e5f5; color:#6a1b9a;">TypeScript</span>
       </div>
-      <div class="hero-images">
-        <img src="../images/cannon.png" alt="cannon">
-        <img src="../images/pinball.png" alt="ball">
-        <img src="../images/pin_128.png" alt="pin">
-        <img src="../images/hole.png" alt="hole">
-      </div>
+      <p style="color:#888; font-size:15px; max-width:600px; line-height:1.8;">
+        플레이어 이름을 입력하면 각자 색상의 핀볼이 발사되고,<br>
+        핀과 물레방아를 거쳐 블랙홀에 가장 많이 들어간 사람이 승리합니다.
+      </p>
     </div>
     <div style="position:absolute; bottom:40px; right:80px; color:#bbb; font-size:13px;">
       바이브코딩으로 만든 웹 서비스들
     </div>
   </div>
 
-  <!-- ═══════════════════ SLIDE 2 : 시스템 아키텍처 ═══════════════════ -->
-  <div class="slide">
-    <h1>Pachinko Draw – 시스템 아키텍처</h1>
-    <div class="two-col">
-      <div class="col">
-        <table class="arch-table">
-          <tr><td>Framework</td><td>Next.js 16 + React 19</td></tr>
-          <tr><td>Physics</td><td>Matter.js 0.20</td></tr>
-          <tr><td>Language</td><td>TypeScript 5</td></tr>
-          <tr><td>Styling</td><td>Tailwind CSS 4 + Inline Styles</td></tr>
-          <tr><td>Rendering</td><td>Canvas 2D (동적 해상도 스케일링)</td></tr>
-          <tr><td>Resolution</td><td>1080 × 1920 가상 해상도 → CSS 스케일</td></tr>
-        </table>
-      </div>
-      <div class="col">
-        <h2>핵심 컴포넌트</h2>
-        <div class="tags">
-          <span class="tag green">PachinkoBoard</span>
-          <span class="tag blue">PlayerList</span>
-          <span class="tag red">WinnerDisplay</span>
-          <span class="tag orange">Confetti</span>
-          <span class="tag purple">MapPreview</span>
-        </div>
-
-        <h2>유틸리티 모듈</h2>
-        <div class="tags">
-          <span class="tag gray">ballTint</span>
-          <span class="tag gray">winnerCheck</span>
-          <span class="tag gray">blackholeShader</span>
-        </div>
-
-        <hr class="sep">
-        <h2>구조 특징</h2>
-        <ul>
-          <li>모든 물리/렌더가 <strong>단일 Canvas</strong>에서 처리</li>
-          <li>가상 해상도(1080×1920)로 기기 독립적 렌더링</li>
-          <li>플레이어 수에 따라 공 자동 배분 (공정성)</li>
-        </ul>
-      </div>
-    </div>
-  </div>
-
-  <!-- ═══════════════════ SLIDE 3 : 사용된 라이브러리 ═══════════════════ -->
+  <!-- ═══════════════════ SLIDE 2 : 사용된 라이브러리 ═══════════════════ -->
   <div class="slide">
     <h1>Pachinko Draw – 사용된 라이브러리</h1>
     <div class="two-col">
@@ -397,8 +323,8 @@
         <h2>Runtime Dependencies</h2>
         <table class="arch-table">
           <tr><td>matter-js</td><td>2D 물리 엔진. 충돌, 중력, 강체 시뮬레이션</td></tr>
-          <tr><td>next</td><td>16.1.6 — App Router, 서버 컴포넌트 기반 프레임워크</td></tr>
-          <tr><td>react</td><td>19.2.3 — UI 렌더링, 상태 관리, Hooks</td></tr>
+          <tr><td>next</td><td>16.1.6 — App Router 기반 프레임워크</td></tr>
+          <tr><td>react</td><td>19.2.3 — UI 렌더링, 상태 관리</td></tr>
           <tr><td>react-dom</td><td>19.2.3 — DOM 바인딩</td></tr>
         </table>
 
@@ -413,7 +339,7 @@
         <h2>왜 이 조합인가?</h2>
         <ul>
           <li><strong>Matter.js</strong> — 가볍고 브라우저 네이티브, 별도 WASM 불필요</li>
-          <li><strong>Next.js 16</strong> — dynamic import로 PachinkoBoard 지연 로딩</li>
+          <li><strong>Next.js 16</strong> — dynamic import로 게임 컴포넌트 지연 로딩</li>
           <li><strong>React 19</strong> — useCallback/useRef로 게임 루프와 상태 분리</li>
           <li><strong>Canvas 2D</strong> — WebGL 없이도 수백 개 공 60fps 렌더링</li>
         </ul>
@@ -426,58 +352,56 @@
     </div>
   </div>
 
-  <!-- ═══════════════════ SLIDE 4 : Matter.js 설명 ═══════════════════ -->
+  <!-- ═══════════════════ SLIDE 3 : Matter.js 설명 ═══════════════════ -->
   <div class="slide">
-    <h1>Matter.js – 사용된 기능</h1>
-    <p style="margin-bottom:24px; color:#888;">2D 물리 엔진으로 핀볼 시뮬레이션의 핵심을 담당</p>
+    <h1>Matter.js – 물리 엔진 원리</h1>
+    <p style="margin-bottom:28px; color:#888; max-width:700px;">
+      Matter.js는 브라우저에서 동작하는 2D 물리 엔진입니다.<br>
+      "월드"에 물체를 배치하면, 매 프레임마다 중력·충돌·반발을 자동으로 계산해 줍니다.
+    </p>
 
-    <div class="feature-cards">
-      <div class="feature-card">
-        <div class="fc-title">Engine.create / Engine.update</div>
-        <div class="fc-desc">
-          중력(0.96) 설정 후 매 프레임 물리 시뮬레이션 갱신.<br>
-          피날레 모드에서 <code>timeScale = 0.25</code>로 슬로우모션 연출.
+    <div class="principle-cards">
+      <div class="principle-card">
+        <div class="pc-title">월드 & 중력</div>
+        <div class="pc-desc">
+          Engine을 생성하면 월드가 만들어지고, 모든 물체에 중력이 적용됩니다.
+          매 프레임 <code>Engine.update()</code> 호출로 물리 시뮬레이션이 진행됩니다.
         </div>
       </div>
-      <div class="feature-card">
-        <div class="fc-title">Bodies.circle / Bodies.rectangle</div>
-        <div class="fc-desc">
-          공(circle, r=10), 핀(circle, r=10, isStatic),<br>
-          벽(rectangle, isStatic)을 생성해 월드에 배치.
+      <div class="principle-card">
+        <div class="pc-title">강체 (Bodies)</div>
+        <div class="pc-desc">
+          원(circle), 사각형(rectangle) 등 기본 도형으로 물체를 생성합니다.
+          <code>isStatic: true</code>로 고정 장애물(핀, 벽)을 만들 수 있습니다.
         </div>
       </div>
-      <div class="feature-card">
-        <div class="fc-title">Body.setVelocity / setPosition</div>
-        <div class="fc-desc">
-          대포 발사 시 각도별 초기 속도 부여.<br>
-          블랙홀 인력은 <code>setVelocity</code>로 방향 조향.
+      <div class="principle-card">
+        <div class="pc-title">충돌 감지</div>
+        <div class="pc-desc">
+          물체 간 충돌을 자동으로 감지하고 반발/마찰을 계산합니다.
+          <code>isSensor: true</code>로 통과는 허용하면서 감지만 하는 것도 가능합니다.
         </div>
       </div>
-      <div class="feature-card">
-        <div class="fc-title">Body.setAngle / Body.rotate</div>
-        <div class="fc-desc">
-          물레방아 날개 회전 애니메이션.<br>
-          중심축 기준 <code>setPosition + setAngle</code> 갱신.
-        </div>
-      </div>
-      <div class="feature-card">
-        <div class="fc-title">World.add / World.remove</div>
-        <div class="fc-desc">
-          공 발사 시 add, 홀 진입/화면 밖 시 remove.<br>
-          블랙홀 성장 시 센서 교체(remove → 재생성 → add).
-        </div>
-      </div>
-      <div class="feature-card">
-        <div class="fc-title">collisionFilter</div>
-        <div class="fc-desc">
-          홀은 <code>isSensor: true</code>로 통과 감지만.<br>
-          블랙홀 근처 공 간 충돌 비활성화(<code>group = -1</code>).
+      <div class="principle-card">
+        <div class="pc-title">속도 & 위치 제어</div>
+        <div class="pc-desc">
+          <code>setVelocity()</code>로 물체에 힘을 주고,
+          <code>setPosition()</code>/<code>setAngle()</code>로 위치/회전을 직접 제어합니다.
         </div>
       </div>
     </div>
+
+    <hr class="sep" style="margin-top:28px;">
+    <h2 style="margin-top:16px;">이 프로젝트에서의 활용</h2>
+    <ul style="column-count:2; column-gap:48px;">
+      <li><strong>공 발사</strong> — <code>setVelocity</code>로 대포 각도에 따른 초기 속도 부여</li>
+      <li><strong>물레방아</strong> — <code>setAngle + setPosition</code>으로 날개 회전</li>
+      <li><strong>블랙홀 인력</strong> — 거리 기반 <code>setVelocity</code> 조향</li>
+      <li><strong>슬로우모션</strong> — <code>timeScale = 0.25</code>로 피날레 연출</li>
+    </ul>
   </div>
 
-  <!-- ═══════════════════ SLIDE 5 : 프로세스 흐름 ═══════════════════ -->
+  <!-- ═══════════════════ SLIDE 4 : 프로세스 흐름 ═══════════════════ -->
   <div class="slide">
     <h1>Pachinko Draw – 전체 프로세스 흐름</h1>
 
@@ -548,34 +472,24 @@
     </div>
   </div>
 
-  <!-- ═══════════════════ SLIDE 6 : 스크린샷 + 링크 ═══════════════════ -->
+  <!-- ═══════════════════ SLIDE 5 : 스크린샷 + 링크 ═══════════════════ -->
   <div class="slide">
     <h1>Pachinko Draw – 스크린샷</h1>
 
-    <div class="screenshot-row">
-      <div class="screenshot-card">
-        <img src="../images/input.png" alt="입력 화면">
-        <div class="caption">플레이어 입력 화면</div>
+    <div class="screenshot-main">
+      <div>
+        <img src="파칭코_뽑기.png" alt="게임 화면">
+        <div class="screenshot-caption">게임 플레이 화면</div>
       </div>
-      <div class="screenshot-card">
-        <img src="../images/cannon.png" alt="대포">
-        <div class="caption">대포 (발사 장치)</div>
-      </div>
-      <div class="screenshot-card">
-        <img src="../images/pin_128.png" alt="핀">
-        <div class="caption">핀 (충돌 장애물)</div>
-      </div>
-      <div class="screenshot-card">
-        <img src="../images/pinball.png" alt="핀볼">
-        <div class="caption">핀볼 (플레이어 공)</div>
-      </div>
-      <div class="screenshot-card">
-        <img src="../images/hole.png" alt="블랙홀">
-        <div class="caption">블랙홀 (점수 영역)</div>
-      </div>
-      <div class="screenshot-card">
-        <img src="../images/paint.png" alt="기획 스케치">
-        <div class="caption">초기 기획 스케치</div>
+      <div class="screenshot-side">
+        <div>
+          <img src="../images/paint.png" alt="기획 스케치">
+          <div class="screenshot-caption">초기 기획 스케치</div>
+        </div>
+        <div>
+          <img src="../images/input.png" alt="입력 화면">
+          <div class="screenshot-caption">플레이어 입력 UI</div>
+        </div>
       </div>
     </div>
 
@@ -589,7 +503,7 @@
 </div>
 
 <!-- ── Slide counter & nav hint ──────────────────────────────── -->
-<div class="slide-counter" id="counter">1 / 6</div>
+<div class="slide-counter" id="counter">1 / 5</div>
 <div class="nav-hint">← → 방향키로 이동</div>
 
 <script>

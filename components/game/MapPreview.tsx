@@ -16,6 +16,23 @@ interface PinDef {
   y: number;
 }
 
+interface BumperDef {
+  x: number;
+  y: number;
+  r: number;
+}
+
+const FUNNEL_BUMPERS: BumperDef[] = [
+  { x: 540, y: 450, r: 50 },
+  { x: 270, y: 700, r: 45 },
+  { x: 810, y: 700, r: 45 },
+];
+
+const FUNNEL_FLIPPERS = [
+  { cx: 330, cy: 1050, width: 200, height: 16, rangeX: 140, period: 2800, phase: 0 },
+  { cx: 750, cy: 1050, width: 200, height: 16, rangeX: 140, period: 2800, phase: Math.PI },
+];
+
 function buildPins(map: string): PinDef[] {
   const pins: PinDef[] = [];
   const yStart = 150;
@@ -36,7 +53,11 @@ function buildPins(map: string): PinDef[] {
   function addPin(x: number, y: number) {
     const skipWm = wmCenters.some((wm) => Math.hypot(x - wm.x, y - wm.y) < 150);
     const skipHole = Math.hypot(x - HOLE_X, y - HOLE_Y) < HOLE_EXCLUDE;
-    if (!skipWm && !skipHole) pins.push({ x, y });
+    const skipBumper = map === 'funnel' && FUNNEL_BUMPERS.some((b) => Math.hypot(x - b.x, y - b.y) < b.r + 60);
+    const skipFlipper = map === 'funnel' && FUNNEL_FLIPPERS.some((f) =>
+      Math.abs(y - f.cy) < 40 && Math.abs(x - f.cx) < f.width / 2 + f.rangeX + 30
+    );
+    if (!skipWm && !skipHole && !skipBumper && !skipFlipper) pins.push({ x, y });
   }
 
   for (let r = 0; r < rowCount; r++) {
@@ -227,6 +248,52 @@ export default function MapPreview({ map }: Props) {
             ctx.fillRect(-70, -8, 140, 16);
             ctx.restore();
           }
+        }
+        ctx.restore();
+      }
+
+      // Bumpers (funnel map)
+      if (map === 'funnel') {
+        ctx.save();
+        for (const b of FUNNEL_BUMPERS) {
+          ctx.shadowBlur = 30;
+          ctx.shadowColor = '#FF1493';
+          ctx.strokeStyle = '#FF1493';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, b.r + 4, 0, Math.PI * 2);
+          ctx.stroke();
+          const bGrad = ctx.createRadialGradient(b.x - b.r * 0.2, b.y - b.r * 0.2, 0, b.x, b.y, b.r);
+          bGrad.addColorStop(0, '#FF69B4');
+          bGrad.addColorStop(0.6, '#FF1493');
+          bGrad.addColorStop(1, '#C71585');
+          ctx.shadowBlur = 20;
+          ctx.fillStyle = bGrad;
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+          ctx.beginPath();
+          ctx.arc(b.x - b.r * 0.25, b.y - b.r * 0.25, b.r * 0.35, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+
+        // Animated flippers
+        ctx.save();
+        ctx.shadowBlur = 18;
+        ctx.shadowColor = '#FF8C00';
+        for (const f of FUNNEL_FLIPPERS) {
+          const t = (now / f.period) * Math.PI * 2 + f.phase;
+          const fx = f.cx + Math.sin(t) * f.rangeX;
+          ctx.fillStyle = '#FFA500';
+          ctx.beginPath();
+          ctx.roundRect(fx - f.width / 2, f.cy - f.height / 2, f.width, f.height, 8);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+          ctx.beginPath();
+          ctx.roundRect(fx - f.width / 2 + 4, f.cy - f.height / 2 + 2, f.width - 8, f.height / 3, 4);
+          ctx.fill();
         }
         ctx.restore();
       }
