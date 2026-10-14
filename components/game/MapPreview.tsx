@@ -130,7 +130,7 @@ export default function MapPreview({ map }: Props) {
 
     const pi = new Image();
     pi.onload = () => { pinImg = pi; };
-    pi.src = '/images/pin_128.png';
+    pi.src = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/images/pin_128.png`;
 
     function draw(now: number) {
       rafRef.current = requestAnimationFrame(draw);

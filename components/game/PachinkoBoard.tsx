@@ -365,7 +365,7 @@ export default function PachinkoBoard({ players, map, onScore, onWinner }: Props
 
     const pi = new Image();
     pi.onload = () => { pinImg = pi; };
-    pi.src = '/images/pin_128.png';
+    pi.src = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/images/pin_128.png`;
 
     tintedBalls = preloadTintedBalls(players.map((p) => p.color), BALL_R * 2);
 
